@@ -5,6 +5,7 @@ import { join } from 'path';
 config(); // Load .env
 
 const isProduction = process.env.NODE_ENV === 'production';
+const ext = isProduction ? '.js' : '{.ts,.js}';
 
 export default new DataSource({
   type: 'postgres',
@@ -16,8 +17,8 @@ export default new DataSource({
   username: !process.env.DATABASE_URL ? process.env.DB_USER : undefined,
   password: !process.env.DATABASE_URL ? process.env.DB_PASSWORD : undefined,
   database: !process.env.DATABASE_URL ? process.env.DB_NAME : undefined,
-  entities: [join(__dirname, '../**/*.entity{.ts,.js}')],
-  migrations: [join(__dirname, './migrations/*{.ts,.js}')],
+  entities: [join(__dirname, `../**/*.entity${ext}`)],
+  migrations: [join(__dirname, `./migrations/*${ext}`)],
   synchronize: false,
   logging: true,
   ssl:
