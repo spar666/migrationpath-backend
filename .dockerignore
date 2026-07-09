@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+.git
+Dockerfile
+docker-compose*
+README.md
+test
+*.spec.ts

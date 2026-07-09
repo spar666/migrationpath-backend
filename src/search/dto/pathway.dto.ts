@@ -1,0 +1,13 @@
+export class PathwayDto {
+  university: string;
+  course: string;
+  anzsco_code?: string;
+  occupation?: string;
+  duration: string;
+  degree_level: string;
+}
+
+export class SearchResponseDto {
+  summary: string;
+  pathways: PathwayDto[];
+}
