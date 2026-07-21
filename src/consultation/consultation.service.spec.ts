@@ -75,12 +75,12 @@ describe('ConsultationService', () => {
 
   describe('deliverStrategy', () => {
     it('delegates to the booking repository', async () => {
-      bookingRepo.deliverStrategy.mockResolvedValue({ id: 'booking-1', strategy: 'plan A' } as any);
+      bookingRepo.deliverStrategy.mockResolvedValue({ id: 'booking-1', strategy_delivery: 'plan A' } as any);
 
       const result = await service.deliverStrategy('booking-1', 'plan A');
 
       expect(bookingRepo.deliverStrategy).toHaveBeenCalledWith('booking-1', 'plan A');
-      expect(result.strategy).toBe('plan A');
+      expect(result.strategy_delivery).toBe('plan A');
     });
   });
 

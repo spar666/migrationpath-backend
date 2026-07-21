@@ -6,7 +6,11 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-export type LeadSource = 'quote_slideover' | 'quote_page' | 'other';
+export type LeadSource =
+  | 'quote_slideover'
+  | 'quote_page'
+  | 'partner_eligibility'
+  | 'other';
 export type LeadStatus = 'new' | 'contacted' | 'converted' | 'archived';
 
 @Entity('leads')
@@ -21,18 +25,18 @@ export class Lead {
   email: string;
 
   @Column({ nullable: true })
-  phone: string;
+  phone?: string;
 
   @Column({ nullable: true })
-  visa_type: string;
+  visa_type?: string;
 
   @Column({ type: 'text', nullable: true })
-  message: string;
+  message?: string;
 
   // Optional link to a specific service package, when the lead came from
   // the /quote page rather than the header quick-quote slide-over.
   @Column('uuid', { nullable: true })
-  package_id: string;
+  package_id?: string;
 
   @Column({ default: 'other' })
   source: LeadSource;

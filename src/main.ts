@@ -47,8 +47,10 @@ async function bootstrap() {
   });
 
   // --- API Prefix & Versioning ---
+  // "/" stays unprefixed so load balancers / uptime probes hitting the root
+  // (often with HEAD) get a 200 instead of a 404.
   app.setGlobalPrefix(apiPrefix, {
-    exclude: ['health'],
+    exclude: ['health', '/'],
   });
 
   // --- Global Interceptors ---
