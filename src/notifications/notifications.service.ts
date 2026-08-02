@@ -10,7 +10,7 @@ export class NotificationsService {
   ) {}
 
   async getPreferences(userId: string): Promise<NotificationPreference> {
-    return this.preferencesRepo.findByUserId(userId);
+    return this.preferencesRepo.findOrCreateByUserId(userId);
   }
 
   async updatePreferences(

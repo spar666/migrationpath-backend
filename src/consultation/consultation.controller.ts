@@ -22,7 +22,7 @@ import { AuthUser } from '../common/interfaces/auth-user.interface';
 
 @ApiTags('consultation')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('consultation')
 export class ConsultationController {
   constructor(private readonly consultationService: ConsultationService) {}
@@ -52,7 +52,6 @@ export class ConsultationController {
   }
 
   @Get('questionnaire')
-
   @Roles('admin')
   @ApiOperation({ summary: 'List all consultation questionnaires (admin only)' })
   findAllQuestionnaires(@Query() query: PaginationQueryDto) {
@@ -63,7 +62,6 @@ export class ConsultationController {
   }
 
   @Get('all')
-  @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'List all consultation bookings (admin only)' })
   findAll(@Query() query: PaginationQueryDto) {
@@ -74,7 +72,6 @@ export class ConsultationController {
   }
 
   @Patch(':id/strategy')
-  @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Deliver strategy to client (admin only)' })
   deliverStrategy(@Param('id') id: string, @Body() dto: DeliverStrategyDto) {
@@ -82,7 +79,6 @@ export class ConsultationController {
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Delete a consultation booking (admin only)' })
   remove(@Param('id') id: string) {

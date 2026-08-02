@@ -14,6 +14,7 @@ import { MigrationRuleService } from './migration-rule.service';
 import { CreateMigrationRuleDto } from './dto/create-migration-rule.dto';
 import { UpdateMigrationRuleDto } from './dto/update-migration-rule.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 
 @ApiTags('migration-rules')
@@ -43,7 +44,7 @@ export class MigrationRuleController {
 
   @Post()
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Create a migration rule (admin only)' })
   create(@Body() dto: CreateMigrationRuleDto) {
@@ -52,7 +53,7 @@ export class MigrationRuleController {
 
   @Put(':id')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Update a migration rule (admin only)' })
   update(@Param('id') id: string, @Body() dto: UpdateMigrationRuleDto) {
@@ -61,7 +62,7 @@ export class MigrationRuleController {
 
   @Delete(':id')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Delete a migration rule (admin only)' })
   remove(@Param('id') id: string) {

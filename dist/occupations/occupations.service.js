@@ -35,8 +35,34 @@ let OccupationsService = OccupationsService_1 = class OccupationsService {
         this.occupationVisaRepository = occupationVisaRepository;
         this.dataSource = dataSource;
     }
-    async findAll(filters) {
-        return this.occupationRepository.find({ where: filters });
+    async findAll(filters = {}) {
+        const where = {};
+        const filterable = [
+            'anzsco_code',
+            'occupation_name',
+            'assessing_authority',
+            'primary_list',
+        ];
+        for (const key of filterable) {
+            if (filters[key] !== undefined && filters[key] !== '') {
+                where[key] = filters[key];
+            }
+        }
+        const take = Math.min(Math.max(parseInt(filters.limit, 10) || 50, 1), 200);
+        const page = Math.max(parseInt(filters.page, 10) || 1, 1);
+        const [data, total] = await this.occupationRepository.findAndCount({
+            where,
+            take,
+            skip: (page - 1) * take,
+            order: { occupation_name: 'ASC' },
+        });
+        return {
+            data,
+            total,
+            page,
+            limit: take,
+            totalPages: Math.ceil(total / take) || 1,
+        };
     }
     async searchOccupations(query) {
         const { q, assessing_authority, state_code, is_available, page = 1, limit = 10, } = query;

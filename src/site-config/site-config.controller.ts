@@ -31,7 +31,7 @@ export class SiteConfigController {
 
   @Get('admin/site-config')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Get site configuration (admin)' })
   getConfig() {
@@ -40,7 +40,7 @@ export class SiteConfigController {
 
   @Put('admin/site-config')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Update the full site configuration' })
   updateConfig(

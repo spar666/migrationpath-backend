@@ -8,10 +8,16 @@ import {
 describe('ConsultationService', () => {
   let service: ConsultationService;
   let questionnaireRepo: jest.Mocked<
-    Pick<ConsultationQuestionnaireRepository, 'create' | 'findLatestByUserId' | 'paginateWithUser'>
+    Pick<
+      ConsultationQuestionnaireRepository,
+      'create' | 'findLatestByUserId' | 'paginateWithUser'
+    >
   >;
   let bookingRepo: jest.Mocked<
-    Pick<ConsultationBookingRepository, 'paginate' | 'deliverStrategy' | 'hardDelete'>
+    Pick<
+      ConsultationBookingRepository,
+      'paginate' | 'deliverStrategy' | 'hardDelete'
+    >
   >;
 
   beforeEach(async () => {
@@ -35,7 +41,10 @@ describe('ConsultationService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConsultationService,
-        { provide: ConsultationQuestionnaireRepository, useValue: questionnaireRepo },
+        {
+          provide: ConsultationQuestionnaireRepository,
+          useValue: questionnaireRepo,
+        },
         { provide: ConsultationBookingRepository, useValue: bookingRepo },
       ],
     }).compile();
@@ -50,7 +59,11 @@ describe('ConsultationService', () => {
   describe('submitQuestionnaire', () => {
     it('creates a questionnaire tied to the submitting user', async () => {
       const responses = { goal: 'skilled-migration' };
-      questionnaireRepo.create.mockResolvedValue({ id: 'q-1', user_id: 'user-1', responses } as any);
+      questionnaireRepo.create.mockResolvedValue({
+        id: 'q-1',
+        user_id: 'user-1',
+        responses,
+      } as any);
 
       const result = await service.submitQuestionnaire('user-1', responses);
 
@@ -64,22 +77,32 @@ describe('ConsultationService', () => {
 
   describe('findMyQuestionnaire', () => {
     it('delegates to findLatestByUserId', async () => {
-      questionnaireRepo.findLatestByUserId.mockResolvedValue([{ id: 'q-1' } as any]);
+      questionnaireRepo.findLatestByUserId.mockResolvedValue([
+        { id: 'q-1' } as any,
+      ]);
 
       const result = await service.findMyQuestionnaire('user-1');
 
-      expect(questionnaireRepo.findLatestByUserId).toHaveBeenCalledWith('user-1');
+      expect(questionnaireRepo.findLatestByUserId).toHaveBeenCalledWith(
+        'user-1',
+      );
       expect(result).toHaveLength(1);
     });
   });
 
   describe('deliverStrategy', () => {
     it('delegates to the booking repository', async () => {
-      bookingRepo.deliverStrategy.mockResolvedValue({ id: 'booking-1', strategy_delivery: 'plan A' } as any);
+      bookingRepo.deliverStrategy.mockResolvedValue({
+        id: 'booking-1',
+        strategy_delivery: 'plan A',
+      } as any);
 
       const result = await service.deliverStrategy('booking-1', 'plan A');
 
-      expect(bookingRepo.deliverStrategy).toHaveBeenCalledWith('booking-1', 'plan A');
+      expect(bookingRepo.deliverStrategy).toHaveBeenCalledWith(
+        'booking-1',
+        'plan A',
+      );
       expect(result.strategy_delivery).toBe('plan A');
     });
   });

@@ -105,6 +105,9 @@ let BaseRepository = class BaseRepository {
         return c > 0;
     }
     handleError(error) {
+        if (error instanceof common_1.HttpException) {
+            throw error;
+        }
         this.logger.error(`DB error: ${error.message}`);
         if (error.code === '23505') {
             throw new common_1.HttpException('Record already exists', common_1.HttpStatus.CONFLICT);

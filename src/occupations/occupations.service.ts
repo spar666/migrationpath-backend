@@ -48,8 +48,44 @@ export class OccupationsService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async findAll(filters: Record<string, any>) {
-    return this.occupationRepository.find({ where: filters });
+  /**
+   * Query params were previously passed straight into `where`, so any param
+   * that isn't an entity column (`?limit=5`, `?page=2`, a stray UTM tag)
+   * blew up with a 500 from TypeORM. Whitelist the filterable columns and
+   * handle paging separately.
+   */
+  async findAll(filters: Record<string, any> = {}) {
+    const where: Record<string, any> = {};
+    const filterable = [
+      'anzsco_code',
+      'occupation_name',
+      'assessing_authority',
+      'primary_list',
+    ] as const;
+
+    for (const key of filterable) {
+      if (filters[key] !== undefined && filters[key] !== '') {
+        where[key] = filters[key];
+      }
+    }
+
+    const take = Math.min(Math.max(parseInt(filters.limit, 10) || 50, 1), 200);
+    const page = Math.max(parseInt(filters.page, 10) || 1, 1);
+
+    const [data, total] = await this.occupationRepository.findAndCount({
+      where,
+      take,
+      skip: (page - 1) * take,
+      order: { occupation_name: 'ASC' },
+    });
+
+    return {
+      data,
+      total,
+      page,
+      limit: take,
+      totalPages: Math.ceil(total / take) || 1,
+    };
   }
 
   async searchOccupations(query: Record<string, any>) {

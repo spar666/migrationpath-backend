@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   ConflictException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -12,6 +13,9 @@ import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { SignUpDto } from './dto/sign-up.dto';
 import { SignInDto } from './dto/sign-in.dto';
+import { app_role } from './roles.enum';
+import { Profile } from '../user-profile/entities/profile.entity';
+import { NotificationPreference } from '../notifications/entities/notification.entity';
 
 @Injectable()
 export class AuthService {
@@ -20,6 +24,10 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Profile)
+    private readonly profileRepository: Repository<Profile>,
+    @InjectRepository(NotificationPreference)
+    private readonly preferencesRepository: Repository<NotificationPreference>,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -43,7 +51,19 @@ export class AuthService {
 
     const savedUser = await this.userRepository.save(user);
 
-    const payload = { sub: savedUser.id, email: savedUser.email };
+    // A user without its 1:1 `profiles` row makes every /users/me call 404, so
+    // provision the companion rows here rather than leaving the account in a
+    // half-created state. A failure to create them must not fail the sign-up —
+    // both are self-healing on read.
+    await this.provisionUserRecords(savedUser);
+
+    // `role` must be on the token: RolesGuard reads req.user.role, which is
+    // populated from this payload by JwtStrategy.validate().
+    const payload = {
+      sub: savedUser.id,
+      email: savedUser.email,
+      role: savedUser.role,
+    };
     const accessToken = await this.jwtService.signAsync(payload);
 
     return {
@@ -67,13 +87,35 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const payload = { sub: user.id, email: user.email };
+    const payload = { sub: user.id, email: user.email, role: user.role };
     const accessToken = await this.jwtService.signAsync(payload);
 
     return {
       user: this.sanitizeUser(user),
       access_token: accessToken,
     };
+  }
+
+  private async provisionUserRecords(user: User): Promise<void> {
+    try {
+      await this.profileRepository.save(
+        this.profileRepository.create({
+          id: user.id,
+          email: user.email,
+          full_name: user.full_name,
+          is_admin: user.role === app_role.ADMIN,
+        }),
+      );
+      await this.preferencesRepository.save(
+        this.preferencesRepository.create({ user_id: user.id }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Could not provision profile/preferences for ${user.id}: ${
+          (error as Error).message
+        }`,
+      );
+    }
   }
 
   async signOut() {
@@ -115,7 +157,7 @@ export class AuthService {
       if (!user) {
         throw new UnauthorizedException('User not found');
       }
-      const newPayload = { sub: user.id, email: user.email };
+      const newPayload = { sub: user.id, email: user.email, role: user.role };
       const newAccessToken = await this.jwtService.signAsync(newPayload);
       return {
         access_token: newAccessToken,
@@ -142,20 +184,21 @@ export class AuthService {
     };
   }
 
-  async confirmPasswordReset(token: string, newPassword: string) {
-    if (!token || !newPassword) {
-      throw new BadRequestException('Token and new password are required');
-    }
-    const salt = await bcrypt.genSalt();
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
-    const user = await this.userRepository.findOne({
-      where: { email: 'test@example.com' },
-    });
-    if (user) {
-      user.password = hashedPassword;
-      await this.userRepository.save(user);
-    }
-    return { success: true, message: 'Password has been reset successfully.' };
+  /**
+   * DISABLED. The previous implementation ignored `token` entirely and reset
+   * the password of a hardcoded `test@example.com` account — any caller could
+   * take over that account, and no real user could ever reset their password.
+   *
+   * Do not re-enable until there is a real password_reset_tokens table with
+   * single-use, hashed, short-TTL tokens issued by requestPasswordReset().
+   */
+  async confirmPasswordReset(_token: string, _newPassword: string) {
+    this.logger.warn(
+      'confirmPasswordReset called but password reset is not implemented',
+    );
+    throw new ServiceUnavailableException(
+      'Password reset is not available yet. Please contact support.',
+    );
   }
 
   private sanitizeUser(user: User) {

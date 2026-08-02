@@ -9,7 +9,10 @@ describe('PointsEngineService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PointsEngineService,
-        { provide: PointsConfigRepository, useValue: { findAllActive: jest.fn() } },
+        {
+          provide: PointsConfigRepository,
+          useValue: { findAllActive: jest.fn() },
+        },
       ],
     }).compile();
 

@@ -27,6 +27,18 @@ declare const _default: () => {
         url: string;
         apiToken: string | undefined;
     };
+    integrations: {
+        calendly: {
+            signingKey: string | undefined;
+        };
+        stripe: {
+            secretKey: string | undefined;
+            webhookSecret: string | undefined;
+            consultPriceId: string | undefined;
+            successUrl: string | undefined;
+            cancelUrl: string | undefined;
+        };
+    };
     notifications: {
         smtp: {
             host: string | undefined;

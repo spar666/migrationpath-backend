@@ -15,6 +15,7 @@ const helmet_1 = __importDefault(require("helmet"));
 const compression_1 = __importDefault(require("compression"));
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
+        rawBody: true,
         logger: process.env.NODE_ENV === 'production'
             ? ['error', 'warn', 'log']
             : ['error', 'warn', 'log', 'debug', 'verbose'],

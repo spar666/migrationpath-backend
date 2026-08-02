@@ -2,7 +2,9 @@ import { PartnerEligibilityEngine } from './partner-eligibility.engine';
 import { PartnerEligibilityDto } from './dto/partner-eligibility.dto';
 
 /** A married onshore couple with no complications — the happy path. */
-function baseAnswers(overrides: Partial<PartnerEligibilityDto> = {}): PartnerEligibilityDto {
+function baseAnswers(
+  overrides: Partial<PartnerEligibilityDto> = {},
+): PartnerEligibilityDto {
   return {
     applicantFirstName: 'A',
     sponsorFirstName: 'S',
@@ -24,7 +26,7 @@ function baseAnswers(overrides: Partial<PartnerEligibilityDto> = {}): PartnerEli
     techComfort: 'Very comfortable',
     email: 'a@example.com',
     ...overrides,
-  } as PartnerEligibilityDto;
+  };
 }
 
 describe('PartnerEligibilityEngine', () => {
@@ -39,13 +41,32 @@ describe('PartnerEligibilityEngine', () => {
 
   describe('ineligible gates', () => {
     it.each([
-      ['relationshipStatus is None of the above', { relationshipStatus: 'None of the above' }],
+      [
+        'relationshipStatus is None of the above',
+        { relationshipStatus: 'None of the above' },
+      ],
       ['either partner is under 18', { bothOver18: 'No' }],
       ['relationship is not exclusive', { exclusiveRelationship: 'No' }],
-      ['sponsor is only visiting Australia', { sponsorResidencyStatus: 'Visiting Australia temporarily' }],
-      ['sponsor previous sponsorship has not ended', { sponsorPreviouslySponsored: 'Yes', previousSponsorshipEnded: 'No' }],
-      ['sponsor has sponsored 2 or more times', { sponsorPreviouslySponsored: 'Yes', previousSponsorshipEnded: 'Yes', previousSponsorshipCount: '2 or more' }],
-      ['applicant still with previous PMV sponsor', { stillWithPMVSponsor: 'Yes' }],
+      [
+        'sponsor is only visiting Australia',
+        { sponsorResidencyStatus: 'Visiting Australia temporarily' },
+      ],
+      [
+        'sponsor previous sponsorship has not ended',
+        { sponsorPreviouslySponsored: 'Yes', previousSponsorshipEnded: 'No' },
+      ],
+      [
+        'sponsor has sponsored 2 or more times',
+        {
+          sponsorPreviouslySponsored: 'Yes',
+          previousSponsorshipEnded: 'Yes',
+          previousSponsorshipCount: '2 or more',
+        },
+      ],
+      [
+        'applicant still with previous PMV sponsor',
+        { stillWithPMVSponsor: 'Yes' },
+      ],
     ])('ineligible when %s', (_desc, overrides) => {
       const result = engine.assess(baseAnswers(overrides));
       expect(result.outcome).toBe('ineligible');
@@ -69,7 +90,10 @@ describe('PartnerEligibilityEngine', () => {
 
   describe('high-risk flags', () => {
     it.each([
-      ['visa issues (refusal/cancellation/overstay/breach)', { visaIssues: 'Yes' }],
+      [
+        'visa issues (refusal/cancellation/overstay/breach)',
+        { visaIssues: 'Yes' },
+      ],
       ['criminal offences', { criminalOffences: 'Yes' }],
       ['serious health conditions', { seriousHealthConditions: 'Yes' }],
       ['applicant lives in a high-risk country', { applicantCountry: 'Iran' }],
@@ -87,7 +111,9 @@ describe('PartnerEligibilityEngine', () => {
 
   describe('effort level', () => {
     it('high effort when not comfortable with technology', () => {
-      const result = engine.assess(baseAnswers({ techComfort: 'Not comfortable' }));
+      const result = engine.assess(
+        baseAnswers({ techComfort: 'Not comfortable' }),
+      );
       expect(result.effort).toBe('High Effort');
       expect(result.outcome).toBe('high_effort');
     });
@@ -100,7 +126,9 @@ describe('PartnerEligibilityEngine', () => {
     });
 
     it('medium effort with additional migrating family members', () => {
-      const result = engine.assess(baseAnswers({ additionalMigratingMembers: '1' }));
+      const result = engine.assess(
+        baseAnswers({ additionalMigratingMembers: '1' }),
+      );
       expect(result.effort).toBe('Medium Effort');
       expect(result.outcome).toBe('eligible');
     });

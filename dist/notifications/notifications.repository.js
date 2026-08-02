@@ -33,7 +33,21 @@ let NotificationPreferencesRepository = class NotificationPreferencesRepository 
         }
         return prefs;
     }
+    async findOrCreateByUserId(userId) {
+        const existing = await this.repository.findOne({
+            where: { user_id: userId },
+        });
+        if (existing)
+            return existing;
+        try {
+            return await this.repository.save(this.repository.create({ user_id: userId }));
+        }
+        catch {
+            return this.findByUserId(userId);
+        }
+    }
     async updateByUserId(userId, data) {
+        await this.findOrCreateByUserId(userId);
         await this.repository.update({ user_id: userId }, data);
         return this.findByUserId(userId);
     }

@@ -72,4 +72,40 @@ export class ConsultationBookingRepository extends BaseRepository<ConsultationBo
       status: 'completed',
     });
   }
+
+  /**
+   * Look up by the scheduler's own id. This is how a Calendly webhook finds
+   * the row it already created — invitee.created and invitee.canceled both
+   * carry the same invitee URI, and providers replay webhooks, so matching on
+   * this rather than on (prospect, time) is what makes replays harmless.
+   */
+  findBySchedulerEventId(
+    schedulerEventId: string,
+  ): Promise<ConsultationBooking | null> {
+    return this.bookingRepository.findOne({
+      where: { scheduler_event_id: schedulerEventId },
+    });
+  }
+
+  findByProspectId(prospectId: string): Promise<ConsultationBooking[]> {
+    return this.bookingRepository.find({
+      where: { prospect_id: prospectId },
+      order: { created_at: 'DESC' },
+    });
+  }
+
+  /**
+   * The most recent slot a prospect holds. Used by checkout to work out which
+   * booking the payment is confirming.
+   */
+  async findLatestForProspect(
+    prospectId: string,
+  ): Promise<ConsultationBooking | null> {
+    const [latest] = await this.bookingRepository.find({
+      where: { prospect_id: prospectId },
+      order: { created_at: 'DESC' },
+      take: 1,
+    });
+    return latest ?? null;
+  }
 }

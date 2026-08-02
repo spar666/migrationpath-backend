@@ -116,7 +116,9 @@ describe('Leads (e2e)', () => {
       const statuses = responses.map((r) => r.status);
 
       // The 6th request in the same window should be throttled.
-      expect(statuses.filter((s) => s === 429).length).toBeGreaterThanOrEqual(1);
+      expect(statuses.filter((s) => s === 429).length).toBeGreaterThanOrEqual(
+        1,
+      );
     });
   });
 

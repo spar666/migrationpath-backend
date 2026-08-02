@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+
+# A second push to the same PR cancels the first run rather than queueing
+# behind it — the older result is not interesting once it is superseded.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` rather than `npm install`: it installs exactly the lockfile
+      # and fails if package.json and the lock have drifted, which is the check
+      # you want on CI. It also installs the correct platform binaries — the
+      # committed tree has none, so a copied node_modules cannot leak in.
+      - name: Install
+        run: npm ci
+
+      # Reports, does not block — and that is a deliberate, temporary setting.
+      #
+      # `src/` currently has ~666 pre-existing lint errors, almost all
+      # no-unsafe-* on `any`. Gating on that would make CI red from its first
+      # run, and a permanently-red pipeline is worse than no pipeline: people
+      # stop reading it, and the genuine failure that shows up next month gets
+      # ignored along with the noise.
+      #
+      # The test and typecheck steps below DO block, so this is still a real
+      # gate on the things that matter today.
+      #
+      # To turn linting into a gate: burn the existing errors down (many are
+      # `--fix`-able), then delete continue-on-error. Note the repo's own
+      # `npm run lint` passes --fix, which on CI would rewrite files and report
+      # success — hence the read-only invocation here.
+      - name: Lint (report only — see comment)
+        continue-on-error: true
+        run: npx eslint "{src,apps,libs,test}/**/*.ts"
+
+      # Tests and their helpers ARE gated. They were written clean and should
+      # stay that way.
+      - name: Lint tests (blocking)
+        run: npx eslint "src/**/*.spec.ts" "test/**/*.ts" --max-warnings 0
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test -- --ci --runInBand
+
+      # Boots the real app over HTTP with an in-memory persistence layer, so it
+      # needs no database and belongs in the fast job rather than with the
+      # Postgres-backed specs below.
+      - name: Functional flow (no database required)
+        run: npx jest --config ./test/jest-e2e.json funnel-flow --ci --runInBand
+
+      - name: Build
+        run: npm run build
+
+  # E2E specs boot the Nest app against a real database. Kept in its own job so
+  # a Postgres hiccup does not mask a unit-test failure, and so the fast job
+  # still reports quickly.
+  e2e:
+    name: E2E (Postgres)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: migration_test
+        ports:
+          - 5432:5432
+        # Without the healthcheck the first connection races the container and
+        # the suite fails on a cold start roughly one run in three.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/migration_test
+      JWT_SECRET: ci-only-not-a-real-secret
+      JWT_EXPIRES_IN: 1h
+      # The funnel integrations stay unset. Every one of them is fail-closed,
+      # which is itself worth exercising: the app must boot and serve without
+      # Stripe or Calendly configured.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Run migrations
+        run: npm run migration:run
+
+      # app.e2e-spec and leads.e2e-spec need a live database — this job is the
+      # only place they can pass. funnel-flow is excluded because the fast job
+      # already ran it.
+      - name: E2E tests
+        run: npm run test:e2e -- --ci --runInBand --testPathIgnorePatterns funnel-flow

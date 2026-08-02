@@ -12,6 +12,11 @@ import compression from 'compression';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    // Required by the Stripe and Calendly webhook controllers. Both verify a
+    // signature computed over the EXACT bytes the provider sent — parsing the
+    // JSON and re-serialising it does not round-trip (key order, unicode
+    // escapes, whitespace), so without this every webhook fails verification.
+    rawBody: true,
     logger:
       process.env.NODE_ENV === 'production'
         ? ['error', 'warn', 'log']

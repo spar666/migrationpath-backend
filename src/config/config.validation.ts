@@ -39,6 +39,23 @@ export const configValidationSchema = Joi.object({
   STRAPI_URL: Joi.string().uri().default('http://localhost:1337'),
   STRAPI_API_TOKEN: Joi.string().optional(),
 
+  // --- Integrations (all optional) ---
+  //
+  // Optional on purpose: local dev, CI and any environment that does not take
+  // payments must still boot. The code fails closed at the point of use
+  // instead — an unset Stripe key disables checkout with a 503, an unset
+  // Calendly signing key rejects webhooks with a 401. Making these required
+  // would mean nobody can run the API without a Stripe account.
+  //
+  // ⚠️ They ARE effectively required in production. Verify they are set as
+  // part of the go-live checklist, not by a schema that blocks local dev.
+  CALENDLY_WEBHOOK_SIGNING_KEY: Joi.string().optional(),
+  STRIPE_SECRET_KEY: Joi.string().optional(),
+  STRIPE_WEBHOOK_SECRET: Joi.string().optional(),
+  STRIPE_CONSULT_PRICE_ID: Joi.string().optional(),
+  STRIPE_SUCCESS_URL: Joi.string().uri().optional(),
+  STRIPE_CANCEL_URL: Joi.string().uri().optional(),
+
   // // --- Notifications (all optional — lead notifications no-op if unset) ---
   // SMTP_HOST: Joi.string().optional(),
   // SMTP_PORT: Joi.number().default(587),

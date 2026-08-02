@@ -51,6 +51,7 @@ const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
 const profile_repository_1 = require("./profile.repository");
 const user_entity_1 = require("../auth/entities/user.entity");
+const roles_enum_1 = require("../auth/roles.enum");
 const notifications_service_1 = require("../notifications/notifications.service");
 const bcrypt = __importStar(require("bcrypt"));
 let UserProfileService = class UserProfileService {
@@ -63,10 +64,30 @@ let UserProfileService = class UserProfileService {
         this.userRepository = userRepository;
     }
     async getMyProfile(userId) {
-        return this.profileRepo.findByUserId(userId);
+        return this.ensureProfile(userId);
     }
     async updateMyProfile(userId, dto) {
+        await this.ensureProfile(userId);
         return this.profileRepo.updateByUserId(userId, dto);
+    }
+    async ensureProfile(userId) {
+        try {
+            return await this.profileRepo.findByUserId(userId);
+        }
+        catch {
+            const user = await this.userRepository.findOne({
+                where: { id: userId },
+            });
+            if (!user) {
+                throw new common_1.NotFoundException('User not found');
+            }
+            return this.profileRepo.create({
+                id: user.id,
+                email: user.email,
+                full_name: user.full_name,
+                is_admin: user.role === roles_enum_1.app_role.ADMIN,
+            });
+        }
     }
     async getAllProfiles(page, limit) {
         return this.profileRepo.paginate(page, limit);

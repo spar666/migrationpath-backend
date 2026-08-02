@@ -40,6 +40,14 @@ import { RegionalPostcodeModule } from './regional-postcode/regional-postcode.mo
 import { DataFreshnessModule } from './data-freshness/data-freshness.module';
 import { SiteConfigModule } from './site-config/site-config.module';
 
+// --- Lead-gen funnel ---
+// PreScreenModule pulls in EmployerSponsoredModule itself, so that one is not
+// listed separately.
+import { ProspectModule } from './prospect/prospect.module';
+import { PaymentsModule } from './payments/payments.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
+import { PreScreenModule } from './pre-screen/pre-screen.module';
+
 // Middleware
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 
@@ -96,6 +104,12 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
     CmsModule,
     MigrationRuleModule,
     StatsModule,
+
+    // --- Lead-gen funnel ---
+    ProspectModule,
+    PaymentsModule,
+    WebhooksModule,
+    PreScreenModule,
   ],
   controllers: [AppController],
   providers: [

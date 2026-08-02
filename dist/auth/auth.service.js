@@ -53,12 +53,19 @@ const typeorm_2 = require("typeorm");
 const jwt_1 = require("@nestjs/jwt");
 const bcrypt = __importStar(require("bcrypt"));
 const user_entity_1 = require("./entities/user.entity");
+const roles_enum_1 = require("./roles.enum");
+const profile_entity_1 = require("../user-profile/entities/profile.entity");
+const notification_entity_1 = require("../notifications/entities/notification.entity");
 let AuthService = AuthService_1 = class AuthService {
     userRepository;
+    profileRepository;
+    preferencesRepository;
     jwtService;
     logger = new common_1.Logger(AuthService_1.name);
-    constructor(userRepository, jwtService) {
+    constructor(userRepository, profileRepository, preferencesRepository, jwtService) {
         this.userRepository = userRepository;
+        this.profileRepository = profileRepository;
+        this.preferencesRepository = preferencesRepository;
         this.jwtService = jwtService;
     }
     async signUp(dto) {
@@ -76,7 +83,12 @@ let AuthService = AuthService_1 = class AuthService {
             full_name: dto.fullName,
         });
         const savedUser = await this.userRepository.save(user);
-        const payload = { sub: savedUser.id, email: savedUser.email };
+        await this.provisionUserRecords(savedUser);
+        const payload = {
+            sub: savedUser.id,
+            email: savedUser.email,
+            role: savedUser.role,
+        };
         const accessToken = await this.jwtService.signAsync(payload);
         return {
             user: this.sanitizeUser(savedUser),
@@ -94,12 +106,26 @@ let AuthService = AuthService_1 = class AuthService {
         if (!isPasswordValid) {
             throw new common_1.UnauthorizedException('Invalid email or password');
         }
-        const payload = { sub: user.id, email: user.email };
+        const payload = { sub: user.id, email: user.email, role: user.role };
         const accessToken = await this.jwtService.signAsync(payload);
         return {
             user: this.sanitizeUser(user),
             access_token: accessToken,
         };
+    }
+    async provisionUserRecords(user) {
+        try {
+            await this.profileRepository.save(this.profileRepository.create({
+                id: user.id,
+                email: user.email,
+                full_name: user.full_name,
+                is_admin: user.role === roles_enum_1.app_role.ADMIN,
+            }));
+            await this.preferencesRepository.save(this.preferencesRepository.create({ user_id: user.id }));
+        }
+        catch (error) {
+            this.logger.warn(`Could not provision profile/preferences for ${user.id}: ${error.message}`);
+        }
     }
     async signOut() {
         return { message: 'Signed out successfully' };
@@ -134,7 +160,7 @@ let AuthService = AuthService_1 = class AuthService {
             if (!user) {
                 throw new common_1.UnauthorizedException('User not found');
             }
-            const newPayload = { sub: user.id, email: user.email };
+            const newPayload = { sub: user.id, email: user.email, role: user.role };
             const newAccessToken = await this.jwtService.signAsync(newPayload);
             return {
                 access_token: newAccessToken,
@@ -160,20 +186,9 @@ let AuthService = AuthService_1 = class AuthService {
             message: 'If the email exists, a reset link has been sent.',
         };
     }
-    async confirmPasswordReset(token, newPassword) {
-        if (!token || !newPassword) {
-            throw new common_1.BadRequestException('Token and new password are required');
-        }
-        const salt = await bcrypt.genSalt();
-        const hashedPassword = await bcrypt.hash(newPassword, salt);
-        const user = await this.userRepository.findOne({
-            where: { email: 'test@example.com' },
-        });
-        if (user) {
-            user.password = hashedPassword;
-            await this.userRepository.save(user);
-        }
-        return { success: true, message: 'Password has been reset successfully.' };
+    async confirmPasswordReset(_token, _newPassword) {
+        this.logger.warn('confirmPasswordReset called but password reset is not implemented');
+        throw new common_1.ServiceUnavailableException('Password reset is not available yet. Please contact support.');
     }
     sanitizeUser(user) {
         const { password, ...result } = user;
@@ -184,7 +199,11 @@ exports.AuthService = AuthService;
 exports.AuthService = AuthService = AuthService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(user_entity_1.User)),
+    __param(1, (0, typeorm_1.InjectRepository)(profile_entity_1.Profile)),
+    __param(2, (0, typeorm_1.InjectRepository)(notification_entity_1.NotificationPreference)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
         jwt_1.JwtService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

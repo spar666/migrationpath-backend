@@ -82,7 +82,9 @@ describe('LeadNotifierService', () => {
     const [, payload] = mockedAxios.post.mock.calls[0];
     const blocks = (payload as any).blocks as Array<Record<string, any>>;
     const actionsBlock = blocks.find((b) => b.type === 'actions');
-    expect(actionsBlock?.elements?.[0]?.url).toBe('https://app.example.com/admin/leads');
+    expect(actionsBlock?.elements?.[0]?.url).toBe(
+      'https://app.example.com/admin/leads',
+    );
   });
 
   it('does not fail the caller when the Slack webhook request fails', async () => {

@@ -178,6 +178,13 @@ export abstract class BaseRepository<T extends ObjectLiteral> {
   // ---------------------------------------------------------------------------
 
   private handleError(error: any): never {
+    // Errors we raised deliberately (e.g. the 404 from findById) already carry
+    // the right status — re-wrapping them turned every "not found" on an
+    // update/delete into a 500.
+    if (error instanceof HttpException) {
+      throw error;
+    }
+
     this.logger.error(`DB error: ${error.message}`);
 
     // Postgres error codes

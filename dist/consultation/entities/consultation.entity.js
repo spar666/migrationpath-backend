@@ -52,7 +52,17 @@ exports.ConsultationQuestionnaire = ConsultationQuestionnaire = __decorate([
 let ConsultationBooking = class ConsultationBooking {
     id;
     user_id;
+    prospect_id;
     status;
+    scheduler_provider;
+    scheduler_event_id;
+    scheduler_invitee_id;
+    scheduled_at;
+    scheduled_end_at;
+    join_url;
+    reschedule_url;
+    cancel_url;
+    cancellation_reason;
     strategy_delivery;
     created_at;
     updated_at;
@@ -64,17 +74,59 @@ __decorate([
     __metadata("design:type", String)
 ], ConsultationBooking.prototype, "id", void 0);
 __decorate([
-    (0, typeorm_1.Column)('uuid'),
-    __metadata("design:type", String)
+    (0, typeorm_1.Column)('uuid', { nullable: true }),
+    __metadata("design:type", Object)
 ], ConsultationBooking.prototype, "user_id", void 0);
+__decorate([
+    (0, typeorm_1.Index)(),
+    (0, typeorm_1.Column)('uuid', { nullable: true }),
+    __metadata("design:type", Object)
+], ConsultationBooking.prototype, "prospect_id", void 0);
 __decorate([
     (0, typeorm_1.Column)({
         type: 'enum',
-        enum: ['pending', 'confirmed', 'completed', 'cancelled'],
+        enum: ['pending', 'confirmed', 'completed', 'cancelled', 'no_show'],
         default: 'pending',
     }),
     __metadata("design:type", String)
 ], ConsultationBooking.prototype, "status", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ length: 32, nullable: true }),
+    __metadata("design:type", String)
+], ConsultationBooking.prototype, "scheduler_provider", void 0);
+__decorate([
+    (0, typeorm_1.Index)({ unique: true }),
+    (0, typeorm_1.Column)({ type: 'varchar', nullable: true }),
+    __metadata("design:type", Object)
+], ConsultationBooking.prototype, "scheduler_event_id", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', nullable: true }),
+    __metadata("design:type", Object)
+], ConsultationBooking.prototype, "scheduler_invitee_id", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamptz', nullable: true }),
+    __metadata("design:type", Object)
+], ConsultationBooking.prototype, "scheduled_at", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamptz', nullable: true }),
+    __metadata("design:type", Object)
+], ConsultationBooking.prototype, "scheduled_end_at", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
+    __metadata("design:type", Object)
+], ConsultationBooking.prototype, "join_url", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
+    __metadata("design:type", Object)
+], ConsultationBooking.prototype, "reschedule_url", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
+    __metadata("design:type", Object)
+], ConsultationBooking.prototype, "cancel_url", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
+    __metadata("design:type", Object)
+], ConsultationBooking.prototype, "cancellation_reason", void 0);
 __decorate([
     (0, typeorm_1.Column)({ type: 'text', nullable: true }),
     __metadata("design:type", String)
@@ -88,7 +140,7 @@ __decorate([
     __metadata("design:type", Date)
 ], ConsultationBooking.prototype, "updated_at", void 0);
 __decorate([
-    (0, typeorm_1.ManyToOne)(() => user_entity_1.User, { onDelete: 'CASCADE' }),
+    (0, typeorm_1.ManyToOne)(() => user_entity_1.User, { onDelete: 'CASCADE', nullable: true }),
     (0, typeorm_1.JoinColumn)({ name: 'user_id' }),
     __metadata("design:type", user_entity_1.User)
 ], ConsultationBooking.prototype, "user", void 0);

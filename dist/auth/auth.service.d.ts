@@ -3,17 +3,22 @@ import { JwtService } from '@nestjs/jwt';
 import { User } from './entities/user.entity';
 import { SignUpDto } from './dto/sign-up.dto';
 import { SignInDto } from './dto/sign-in.dto';
+import { app_role } from './roles.enum';
+import { Profile } from '../user-profile/entities/profile.entity';
+import { NotificationPreference } from '../notifications/entities/notification.entity';
 export declare class AuthService {
     private readonly userRepository;
+    private readonly profileRepository;
+    private readonly preferencesRepository;
     private readonly jwtService;
     private readonly logger;
-    constructor(userRepository: Repository<User>, jwtService: JwtService);
+    constructor(userRepository: Repository<User>, profileRepository: Repository<Profile>, preferencesRepository: Repository<NotificationPreference>, jwtService: JwtService);
     signUp(dto: SignUpDto): Promise<{
         user: {
             id: string;
             email: string;
             full_name: string;
-            role: import("./roles.enum").app_role;
+            role: app_role;
             created_at: Date;
             updated_at: Date;
         };
@@ -24,12 +29,13 @@ export declare class AuthService {
             id: string;
             email: string;
             full_name: string;
-            role: import("./roles.enum").app_role;
+            role: app_role;
             created_at: Date;
             updated_at: Date;
         };
         access_token: string;
     }>;
+    private provisionUserRecords;
     signOut(): Promise<{
         message: string;
     }>;
@@ -37,7 +43,7 @@ export declare class AuthService {
         id: string;
         email: string;
         full_name: string;
-        role: import("./roles.enum").app_role;
+        role: app_role;
         created_at: Date;
         updated_at: Date;
     }>;
@@ -48,7 +54,7 @@ export declare class AuthService {
             id: string;
             email: string;
             full_name: string;
-            role: import("./roles.enum").app_role;
+            role: app_role;
             created_at: Date;
             updated_at: Date;
         };
@@ -57,9 +63,6 @@ export declare class AuthService {
         success: boolean;
         message: string;
     }>;
-    confirmPasswordReset(token: string, newPassword: string): Promise<{
-        success: boolean;
-        message: string;
-    }>;
+    confirmPasswordReset(_token: string, _newPassword: string): Promise<void>;
     private sanitizeUser;
 }

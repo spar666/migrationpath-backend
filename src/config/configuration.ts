@@ -40,6 +40,26 @@ export default () => ({
     url: process.env.STRAPI_URL || 'http://localhost:1337',
     apiToken: process.env.STRAPI_API_TOKEN,
   },
+  // Hosted third-party integrations. There is no third-party FORM tool here
+  // by design — the questionnaire must run our own eligibility engine, which
+  // a rented form cannot do.
+  integrations: {
+    calendly: {
+      // ⚠️ Webhook signing is not available on every Calendly plan. If your
+      // plan does not sign webhooks, the endpoint stays disabled (fail-closed)
+      // rather than accepting unverified bookings.
+      signingKey: process.env.CALENDLY_WEBHOOK_SIGNING_KEY,
+    },
+    stripe: {
+      secretKey: process.env.STRIPE_SECRET_KEY,
+      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+      // The consult fee lives in Stripe as a Price object. The client never
+      // sends an amount — if it did, anyone could set their own fee.
+      consultPriceId: process.env.STRIPE_CONSULT_PRICE_ID,
+      successUrl: process.env.STRIPE_SUCCESS_URL,
+      cancelUrl: process.env.STRIPE_CANCEL_URL,
+    },
+  },
   notifications: {
     smtp: {
       host: process.env.SMTP_HOST,

@@ -41,6 +41,10 @@ const policy_config_module_1 = require("./policy-config/policy-config.module");
 const regional_postcode_module_1 = require("./regional-postcode/regional-postcode.module");
 const data_freshness_module_1 = require("./data-freshness/data-freshness.module");
 const site_config_module_1 = require("./site-config/site-config.module");
+const prospect_module_1 = require("./prospect/prospect.module");
+const payments_module_1 = require("./payments/payments.module");
+const webhooks_module_1 = require("./webhooks/webhooks.module");
+const pre_screen_module_1 = require("./pre-screen/pre-screen.module");
 const correlation_id_middleware_1 = require("./common/middleware/correlation-id.middleware");
 let AppModule = class AppModule {
     configure(consumer) {
@@ -95,6 +99,10 @@ exports.AppModule = AppModule = __decorate([
             cms_module_1.CmsModule,
             migration_rule_module_1.MigrationRuleModule,
             stats_module_1.StatsModule,
+            prospect_module_1.ProspectModule,
+            payments_module_1.PaymentsModule,
+            webhooks_module_1.WebhooksModule,
+            pre_screen_module_1.PreScreenModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [

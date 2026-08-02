@@ -82,9 +82,13 @@ describe('LeadsController', () => {
       const updated = { id: 'lead-1', status: 'converted' };
       service.updateStatus.mockResolvedValue(updated as any);
 
-      const result = await controller.updateStatus('lead-1', { status: 'converted' });
+      const result = await controller.updateStatus('lead-1', {
+        status: 'converted',
+      });
 
-      expect(service.updateStatus).toHaveBeenCalledWith('lead-1', { status: 'converted' });
+      expect(service.updateStatus).toHaveBeenCalledWith('lead-1', {
+        status: 'converted',
+      });
       expect(result).toEqual(updated);
     });
   });

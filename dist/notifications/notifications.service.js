@@ -18,7 +18,7 @@ let NotificationsService = class NotificationsService {
         this.preferencesRepo = preferencesRepo;
     }
     async getPreferences(userId) {
-        return this.preferencesRepo.findByUserId(userId);
+        return this.preferencesRepo.findOrCreateByUserId(userId);
     }
     async updatePreferences(userId, dto) {
         return this.preferencesRepo.updateByUserId(userId, dto);

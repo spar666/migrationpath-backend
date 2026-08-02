@@ -11,4 +11,7 @@ export declare class ConsultationBookingRepository extends BaseRepository<Consul
     private readonly bookingRepository;
     constructor(bookingRepository: Repository<ConsultationBooking>);
     deliverStrategy(id: string, strategy: string): Promise<ConsultationBooking>;
+    findBySchedulerEventId(schedulerEventId: string): Promise<ConsultationBooking | null>;
+    findByProspectId(prospectId: string): Promise<ConsultationBooking[]>;
+    findLatestForProspect(prospectId: string): Promise<ConsultationBooking | null>;
 }

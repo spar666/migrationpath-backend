@@ -30,7 +30,13 @@ export declare class OccupationsService {
     private readonly dataSource;
     private readonly logger;
     constructor(occupationRepository: Repository<Occupation>, thresholdRepository: Repository<OccupationThreshold>, visaRepository: Repository<Visa>, occupationVisaRepository: Repository<OccupationVisa>, dataSource: DataSource);
-    findAll(filters: Record<string, any>): Promise<Occupation[]>;
+    findAll(filters?: Record<string, any>): Promise<{
+        data: Occupation[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+    }>;
     searchOccupations(query: Record<string, any>): Promise<{
         data: Occupation[];
         total: number;

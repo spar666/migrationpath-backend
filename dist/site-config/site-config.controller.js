@@ -16,6 +16,7 @@ exports.SiteConfigController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
+const roles_guard_1 = require("../auth/roles.guard");
 const roles_decorator_1 = require("../auth/roles.decorator");
 const user_decorator_1 = require("../common/decorators/user.decorator");
 const auth_user_interface_1 = require("../common/interfaces/auth-user.interface");
@@ -47,7 +48,7 @@ __decorate([
 __decorate([
     (0, common_1.Get)('admin/site-config'),
     (0, swagger_1.ApiBearerAuth)(),
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)('admin'),
     (0, swagger_1.ApiOperation)({ summary: 'Get site configuration (admin)' }),
     __metadata("design:type", Function),
@@ -57,7 +58,7 @@ __decorate([
 __decorate([
     (0, common_1.Put)('admin/site-config'),
     (0, swagger_1.ApiBearerAuth)(),
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)('admin'),
     (0, swagger_1.ApiOperation)({ summary: 'Update the full site configuration' }),
     __param(0, (0, common_1.Body)()),

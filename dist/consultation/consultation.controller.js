@@ -92,7 +92,6 @@ __decorate([
 ], ConsultationController.prototype, "findAllQuestionnaires", null);
 __decorate([
     (0, common_1.Get)('all'),
-    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)('admin'),
     (0, swagger_1.ApiOperation)({ summary: 'List all consultation bookings (admin only)' }),
     __param(0, (0, common_1.Query)()),
@@ -102,7 +101,6 @@ __decorate([
 ], ConsultationController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Patch)(':id/strategy'),
-    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)('admin'),
     (0, swagger_1.ApiOperation)({ summary: 'Deliver strategy to client (admin only)' }),
     __param(0, (0, common_1.Param)('id')),
@@ -113,7 +111,6 @@ __decorate([
 ], ConsultationController.prototype, "deliverStrategy", null);
 __decorate([
     (0, common_1.Delete)(':id'),
-    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)('admin'),
     (0, swagger_1.ApiOperation)({ summary: 'Delete a consultation booking (admin only)' }),
     __param(0, (0, common_1.Param)('id')),
@@ -124,7 +121,7 @@ __decorate([
 exports.ConsultationController = ConsultationController = __decorate([
     (0, swagger_1.ApiTags)('consultation'),
     (0, swagger_1.ApiBearerAuth)(),
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, common_1.Controller)('consultation'),
     __metadata("design:paramtypes", [consultation_service_1.ConsultationService])
 ], ConsultationController);

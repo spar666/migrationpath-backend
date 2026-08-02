@@ -5,5 +5,6 @@ export declare class NotificationPreferencesRepository extends BaseRepository<No
     private readonly notificationPreferenceRepository;
     constructor(notificationPreferenceRepository: Repository<NotificationPreference>);
     findByUserId(userId: string): Promise<NotificationPreference>;
+    findOrCreateByUserId(userId: string): Promise<NotificationPreference>;
     updateByUserId(userId: string, data: Partial<NotificationPreference>): Promise<NotificationPreference>;
 }

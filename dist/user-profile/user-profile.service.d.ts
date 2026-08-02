@@ -12,6 +12,7 @@ export declare class UserProfileService {
     constructor(profileRepo: ProfileRepository, notificationsService: NotificationsService, userRepository: Repository<User>);
     getMyProfile(userId: string): Promise<Profile>;
     updateMyProfile(userId: string, dto: UpdateProfileDto): Promise<Profile>;
+    private ensureProfile;
     getAllProfiles(page: number, limit: number): Promise<PaginatedResult<Profile>>;
     getUserById(id: string): Promise<Profile>;
     getPreferences(userId: string): Promise<{

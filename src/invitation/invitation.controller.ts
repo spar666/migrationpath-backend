@@ -31,7 +31,7 @@ export class InvitationController {
 
   @Post()
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Add a new invitation entry (admin only)' })
   create(@Body() dto: CreateInvitationDto) {
@@ -40,7 +40,7 @@ export class InvitationController {
 
   @Patch(':id')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Update an invitation entry (admin only)' })
   update(@Param('id') id: string, @Body() dto: UpdateInvitationDto) {

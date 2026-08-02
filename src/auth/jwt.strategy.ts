@@ -17,7 +17,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
+  /**
+   * Whatever this returns becomes `req.user`. `role` must be included or
+   * RolesGuard has nothing to check and every @Roles() route fails closed.
+   */
   async validate(payload: any) {
-    return { id: payload.sub, email: payload.email };
+    return {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
+    };
   }
 }

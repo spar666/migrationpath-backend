@@ -10,7 +10,13 @@ export declare class OccupationsController {
         limit: number;
         totalPages: number;
     }>;
-    findAll(filters: Record<string, unknown>): Promise<import("./entities/occupation.entity").Occupation[]>;
+    findAll(filters: Record<string, unknown>): Promise<{
+        data: import("./entities/occupation.entity").Occupation[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+    }>;
     getThresholds(): Promise<import("./entities/occupation.entity").OccupationThreshold[]>;
     findOne(anzsco: string): Promise<import("./occupations.service").OccupationWithVisas>;
     create(createOccupationDto: CreateOccupationDto): Promise<import("./occupations.service").OccupationWithVisas>;

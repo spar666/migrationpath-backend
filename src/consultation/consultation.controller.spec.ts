@@ -7,7 +7,10 @@ describe('ConsultationController', () => {
   let controller: ConsultationController;
   let service: jest.Mocked<ConsultationService>;
 
-  const mockUser: AuthUser = { id: 'user-1', email: 'jane@example.com' } as AuthUser;
+  const mockUser: AuthUser = {
+    id: 'user-1',
+    email: 'jane@example.com',
+  };
 
   beforeEach(async () => {
     // Note: the previous version of this spec only registered
@@ -45,15 +48,18 @@ describe('ConsultationController', () => {
       const dto = { responses: { goal: 'skilled-migration' } };
       service.submitQuestionnaire.mockResolvedValue({ id: 'q-1' } as any);
 
-      const result = await controller.submitQuestionnaire(mockUser, dto as any);
+      const result = await controller.submitQuestionnaire(mockUser, dto);
 
-      expect(service.submitQuestionnaire).toHaveBeenCalledWith('user-1', dto.responses);
+      expect(service.submitQuestionnaire).toHaveBeenCalledWith(
+        'user-1',
+        dto.responses,
+      );
       expect(result).toEqual({ id: 'q-1' });
     });
   });
 
   describe('findMyQuestionnaire', () => {
-    it('looks up the calling user\'s own questionnaire', async () => {
+    it("looks up the calling user's own questionnaire", async () => {
       service.findMyQuestionnaire.mockResolvedValue([{ id: 'q-1' }] as any);
 
       await controller.findMyQuestionnaire(mockUser);
@@ -82,9 +88,14 @@ describe('ConsultationController', () => {
     it('delegates to the service with the route param and body', async () => {
       service.deliverStrategy.mockResolvedValue({ id: 'booking-1' } as any);
 
-      await controller.deliverStrategy('booking-1', { strategy: 'plan A' } as any);
+      await controller.deliverStrategy('booking-1', {
+        strategy: 'plan A',
+      });
 
-      expect(service.deliverStrategy).toHaveBeenCalledWith('booking-1', 'plan A');
+      expect(service.deliverStrategy).toHaveBeenCalledWith(
+        'booking-1',
+        'plan A',
+      );
     });
   });
 

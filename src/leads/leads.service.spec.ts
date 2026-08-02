@@ -84,9 +84,10 @@ describe('LeadsService', () => {
 
     it('defaults source to "other" when not provided', async () => {
       repo.create.mockResolvedValue(mockLead);
-      const { source, ...dtoWithoutSource } = dto;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring to omit
+      const { source: _omitted, ...dtoWithoutSource } = dto;
 
-      await service.create(dtoWithoutSource as CreateLeadDto);
+      await service.create(dtoWithoutSource);
 
       expect(repo.create).toHaveBeenCalledWith(
         expect.objectContaining({ source: 'other' }),
@@ -112,7 +113,10 @@ describe('LeadsService', () => {
     });
 
     it('discards the submission without persisting when the honeypot field is filled', async () => {
-      const spammyDto: CreateLeadDto = { ...dto, website: 'http://spam.example' };
+      const spammyDto: CreateLeadDto = {
+        ...dto,
+        website: 'http://spam.example',
+      };
 
       const result = await service.create(spammyDto);
 
@@ -147,9 +151,13 @@ describe('LeadsService', () => {
       const updatedLead = { ...mockLead, status: 'contacted' as const };
       repo.update.mockResolvedValue(updatedLead);
 
-      const result = await service.updateStatus('lead-1', { status: 'contacted' });
+      const result = await service.updateStatus('lead-1', {
+        status: 'contacted',
+      });
 
-      expect(repo.update).toHaveBeenCalledWith('lead-1', { status: 'contacted' });
+      expect(repo.update).toHaveBeenCalledWith('lead-1', {
+        status: 'contacted',
+      });
       expect(result.status).toBe('contacted');
     });
   });

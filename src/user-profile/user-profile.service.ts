@@ -10,6 +10,7 @@ import { ProfileRepository } from './profile.repository';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { Profile } from './entities/profile.entity';
 import { User } from '../auth/entities/user.entity';
+import { app_role } from '../auth/roles.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 import * as bcrypt from 'bcrypt';
 import { PaginatedResult } from '../common/repositories/base.repository';
@@ -24,14 +25,40 @@ export class UserProfileService {
   ) {}
 
   async getMyProfile(userId: string): Promise<Profile> {
-    return this.profileRepo.findByUserId(userId);
+    return this.ensureProfile(userId);
   }
 
   async updateMyProfile(
     userId: string,
     dto: UpdateProfileDto,
   ): Promise<Profile> {
+    await this.ensureProfile(userId);
     return this.profileRepo.updateByUserId(userId, dto);
+  }
+
+  /**
+   * `profiles` is a 1:1 extension of `users` keyed on the same id. Sign-up now
+   * creates it, but accounts created before that (and any row lost to a failed
+   * write) would otherwise 404 on every /users/me call — so we self-heal from
+   * the user record instead of making the client deal with a missing profile.
+   */
+  private async ensureProfile(userId: string): Promise<Profile> {
+    try {
+      return await this.profileRepo.findByUserId(userId);
+    } catch {
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+      });
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+      return this.profileRepo.create({
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        is_admin: user.role === app_role.ADMIN,
+      });
+    }
   }
 
   async getAllProfiles(

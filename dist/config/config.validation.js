@@ -55,5 +55,11 @@ exports.configValidationSchema = Joi.object({
     THROTTLE_LIMIT: Joi.number().default(100),
     STRAPI_URL: Joi.string().uri().default('http://localhost:1337'),
     STRAPI_API_TOKEN: Joi.string().optional(),
+    CALENDLY_WEBHOOK_SIGNING_KEY: Joi.string().optional(),
+    STRIPE_SECRET_KEY: Joi.string().optional(),
+    STRIPE_WEBHOOK_SECRET: Joi.string().optional(),
+    STRIPE_CONSULT_PRICE_ID: Joi.string().optional(),
+    STRIPE_SUCCESS_URL: Joi.string().uri().optional(),
+    STRIPE_CANCEL_URL: Joi.string().uri().optional(),
 });
 //# sourceMappingURL=config.validation.js.map

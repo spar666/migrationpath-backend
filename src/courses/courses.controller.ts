@@ -51,7 +51,7 @@ export class CoursesController {
 
   @Post()
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Create course (admin)' })
   create(@Body() createCourseDto: CreateCourseDto) {
@@ -60,7 +60,7 @@ export class CoursesController {
 
   @Patch(':id')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Update course (admin)' })
   update(@Param('id') id: string, @Body() updateCourseDto: UpdateCourseDto) {

@@ -71,6 +71,25 @@ let ConsultationBookingRepository = class ConsultationBookingRepository extends 
             status: 'completed',
         });
     }
+    findBySchedulerEventId(schedulerEventId) {
+        return this.bookingRepository.findOne({
+            where: { scheduler_event_id: schedulerEventId },
+        });
+    }
+    findByProspectId(prospectId) {
+        return this.bookingRepository.find({
+            where: { prospect_id: prospectId },
+            order: { created_at: 'DESC' },
+        });
+    }
+    async findLatestForProspect(prospectId) {
+        const [latest] = await this.bookingRepository.find({
+            where: { prospect_id: prospectId },
+            order: { created_at: 'DESC' },
+            take: 1,
+        });
+        return latest ?? null;
+    }
 };
 exports.ConsultationBookingRepository = ConsultationBookingRepository;
 exports.ConsultationBookingRepository = ConsultationBookingRepository = __decorate([

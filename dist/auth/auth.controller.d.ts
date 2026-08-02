@@ -47,10 +47,7 @@ export declare class AuthController {
         success: boolean;
         message: string;
     }>;
-    confirmPasswordReset(dto: any): Promise<{
-        success: boolean;
-        message: string;
-    }>;
+    confirmPasswordReset(dto: any): Promise<void>;
     getMe(req: any): Promise<{
         id: string;
         email: string;

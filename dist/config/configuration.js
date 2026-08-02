@@ -31,6 +31,18 @@ exports.default = () => ({
         url: process.env.STRAPI_URL || 'http://localhost:1337',
         apiToken: process.env.STRAPI_API_TOKEN,
     },
+    integrations: {
+        calendly: {
+            signingKey: process.env.CALENDLY_WEBHOOK_SIGNING_KEY,
+        },
+        stripe: {
+            secretKey: process.env.STRIPE_SECRET_KEY,
+            webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+            consultPriceId: process.env.STRIPE_CONSULT_PRICE_ID,
+            successUrl: process.env.STRIPE_SUCCESS_URL,
+            cancelUrl: process.env.STRIPE_CANCEL_URL,
+        },
+    },
     notifications: {
         smtp: {
             host: process.env.SMTP_HOST,
