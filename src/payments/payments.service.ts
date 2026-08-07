@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   Logger,
+  OnModuleInit,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -84,6 +85,94 @@ function isDefiniteStripeRejection(error: unknown): boolean {
 }
 
 /**
+ * Stripe's documented minimum charge, in MINOR units, for the currencies this
+ * product plausibly bills in.
+ *
+ * Advisory only. Stripe can change these and the list is deliberately short, so
+ * falling under one is a warning rather than a refusal — but it is worth saying
+ * out loud, because a price under the minimum fails at exactly the same moment
+ * and with the same customer-facing message as a malformed one.
+ */
+const MINIMUM_CHARGE_MINOR_UNITS: Record<string, number> = {
+  aud: 50,
+  cad: 50,
+  eur: 50,
+  gbp: 30,
+  jpy: 50,
+  nzd: 50,
+  sgd: 50,
+  usd: 50,
+};
+
+/**
+ * The Price's unit amount, in MINOR units, as a plain decimal string.
+ *
+ * `unit_amount_decimal` is typed as Stripe's branded `Decimal` in SDK v22 but
+ * arrives as a plain JSON string from the v1 REST API, so this survives both:
+ * `Decimal.toString()` gives normalised plain notation, and a string is already
+ * what we want.
+ */
+function minorUnits(price: Stripe.Price): string | null {
+  const decimal = price.unit_amount_decimal;
+  return decimal === null || decimal === undefined ? null : String(decimal);
+}
+
+/**
+ * Can this Price actually be charged for a one-off consultation?
+ *
+ * Returns the operator-facing explanation, or null if the Price is fine. Every
+ * case here is a Price that genuinely exists and has a perfectly valid id — the
+ * id-shape check in the constructor waves all of them through.
+ */
+function explainUnusablePrice(price: Stripe.Price): string | null {
+  if (!price.active) {
+    return (
+      `Price ${price.id} is archived, and Checkout will not accept an archived ` +
+      `price. Un-archive it in the dashboard, or point STRIPE_CONSULT_PRICE_ID ` +
+      `at a live one.`
+    );
+  }
+
+  if (price.type !== 'one_time') {
+    return (
+      `Price ${price.id} is a recurring price. The consultation is charged once, ` +
+      `in \`mode: 'payment'\`, which only accepts one-off prices. Create a ` +
+      `one-time Price for the consult fee.`
+    );
+  }
+
+  const decimal = minorUnits(price);
+  if (decimal === null) {
+    return (
+      `Price ${price.id} has no flat unit amount — it is tiered or metered, ` +
+      `which Checkout cannot charge in payment mode.`
+    );
+  }
+
+  // The failure this whole check exists for. `unit_amount_decimal` is in MINOR
+  // units and Stripe lets you create a Price with fractions of one, but
+  // Checkout in payment mode rejects anything finer than a whole minor unit.
+  // "0.1" is a tenth of a cent and reads exactly like "10 cents", which is the
+  // trap: it looks right in the dashboard and fails only at checkout.
+  if (!/^\d+$/.test(decimal)) {
+    const code = price.currency.toUpperCase();
+    const product =
+      typeof price.product === 'string' ? price.product : price.product.id;
+    return (
+      `Price ${price.id} is ${decimal} ${code} cents — a fraction of a cent. ` +
+      `Checkout cannot charge sub-cent amounts in payment mode, so consultation ` +
+      `checkout WILL fail. A Stripe Price is immutable, so this cannot be edited: ` +
+      `create a replacement with a whole-cent amount ` +
+      `(\`stripe prices create --product=${product} --unit-amount=<whole cents> ` +
+      `--currency=${price.currency}\`), point STRIPE_CONSULT_PRICE_ID at it, and ` +
+      `archive this one.`
+    );
+  }
+
+  return null;
+}
+
+/**
  * How long an unpaid checkout session is offered again instead of replaced.
  *
  * Stripe expires sessions after 24 hours by default. Staying inside that means
@@ -101,7 +190,7 @@ const SESSION_REUSE_MS = 20 * 60 * 60 * 1000;
 export const STALE_SESSION_MS = 26 * 60 * 60 * 1000;
 
 @Injectable()
-export class PaymentsService {
+export class PaymentsService implements OnModuleInit {
   private readonly logger = new Logger(PaymentsService.name);
   private readonly stripe: Stripe | null;
 
@@ -146,6 +235,72 @@ export class PaymentsService {
         'STRIPE_CONSULT_PRICE_ID is not set — consultation checkout is disabled.',
       );
     }
+  }
+
+  /**
+   * Asks Stripe whether the configured Price can actually be charged.
+   *
+   * The constructor can only check that the id LOOKS like a Price id. That
+   * catches a Product id or a bare amount pasted into the env var, and misses
+   * every way a real, valid-looking Price is still unchargeable: archived,
+   * recurring, tiered, or denominated in fractions of a cent. All of those
+   * reach the customer identically — a 503 and "please try again shortly",
+   * advice that can never work for a fault entirely on our side.
+   *
+   * Costs one API call per boot, and per cold start on serverless. Never fatal:
+   * Stripe being unreachable at boot is not a reason to stop serving the rest
+   * of the API, and checkout would surface it anyway.
+   */
+  async onModuleInit(): Promise<void> {
+    const priceId = this.configService.get<string>(
+      'integrations.stripe.consultPriceId',
+    );
+
+    // Both already reported loudly by the constructor; no second opinion needed.
+    if (!this.stripe || !priceId?.startsWith('price_')) return;
+
+    let price: Stripe.Price;
+    try {
+      price = await this.stripe.prices.retrieve(priceId);
+    } catch (error) {
+      const message = (error as Error).message;
+      if (isDefiniteStripeRejection(error)) {
+        // Stripe answered and said no — wrong account, revoked key, deleted
+        // price. That is a real misconfiguration, not a blip.
+        this.logger.error(
+          `STRIPE_CONSULT_PRICE_ID is "${priceId}" but Stripe will not return ` +
+            `it: ${message} Consultation checkout WILL fail.`,
+        );
+      } else {
+        this.logger.warn(
+          `Could not verify STRIPE_CONSULT_PRICE_ID at boot: ${message}`,
+        );
+      }
+      return;
+    }
+
+    const problem = explainUnusablePrice(price);
+    if (problem) {
+      this.logger.error(problem);
+      return;
+    }
+
+    const amount = Number(minorUnits(price));
+    const code = price.currency.toUpperCase();
+    const minimum = MINIMUM_CHARGE_MINOR_UNITS[price.currency];
+
+    if (minimum !== undefined && amount < minimum) {
+      this.logger.error(
+        `Consultation price ${price.id} is ${amount} ${code} cents, under ` +
+          `Stripe's ${minimum}-cent minimum charge for ${code}. Checkout will ` +
+          `reject it and consultation checkout WILL fail.`,
+      );
+      return;
+    }
+
+    this.logger.log(
+      `Consultation price ${price.id} verified: ${amount} ${code} cents.`,
+    );
   }
 
   /**

@@ -21,6 +21,7 @@ import { ConsultationBookingRepository } from '../consultation/consultation.repo
 
 const sessionsCreate = jest.fn();
 const sessionsRetrieve = jest.fn();
+const pricesRetrieve = jest.fn();
 jest.mock('stripe', () =>
   jest.fn().mockImplementation(() => ({
     checkout: {
@@ -28,6 +29,9 @@ jest.mock('stripe', () =>
         create: (...a: unknown[]) => sessionsCreate(...a),
         retrieve: (...a: unknown[]) => sessionsRetrieve(...a),
       },
+    },
+    prices: {
+      retrieve: (...a: unknown[]) => pricesRetrieve(...a),
     },
   })),
 );
@@ -583,5 +587,182 @@ describe('PaymentsService.markSessionUnpaid', () => {
   it('returns null when there is no local row', async () => {
     payments.findBySessionId.mockResolvedValue(null);
     expect(await service.markSessionUnpaid('cs_unknown', 'expired')).toBeNull();
+  });
+});
+
+/**
+ * Boot-time verification of the configured Price.
+ *
+ * The id-shape check in the constructor passes anything starting `price_`,
+ * which is every one of these. Each is a Price that really exists in Stripe and
+ * still cannot be charged — and each reaches the customer identically, as a 503
+ * and "please try again shortly", advice that can never work for a fault
+ * entirely on our side. Catching them at boot is the whole point.
+ */
+describe('PaymentsService.onModuleInit', () => {
+  const GOOD_PRICE = {
+    id: 'price_123',
+    active: true,
+    type: 'one_time',
+    currency: 'aud',
+    unit_amount: 15000,
+    unit_amount_decimal: '15000',
+    product: 'prod_123',
+  };
+
+  let service: PaymentsService;
+  let errors: string[];
+  let warns: string[];
+
+  async function build(config: Record<string, string> = { ...CONFIG }) {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        PaymentsService,
+        {
+          provide: ConfigService,
+          useValue: { get: (key: string) => config[key] },
+        },
+        { provide: PaymentRepository, useValue: {} },
+        { provide: ProspectService, useValue: {} },
+        { provide: ConsultationBookingRepository, useValue: {} },
+      ],
+    }).compile();
+
+    service = module.get<PaymentsService>(PaymentsService);
+    errors = [];
+    warns = [];
+    jest
+      .spyOn(service['logger'], 'error')
+      .mockImplementation((m) => void errors.push(String(m)));
+    jest
+      .spyOn(service['logger'], 'warn')
+      .mockImplementation((m) => void warns.push(String(m)));
+    jest.spyOn(service['logger'], 'log').mockImplementation(() => {});
+  }
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await build();
+  });
+
+  it('accepts a whole-cent one-off price', async () => {
+    pricesRetrieve.mockResolvedValue(GOOD_PRICE);
+    await service.onModuleInit();
+    expect(errors).toEqual([]);
+    expect(warns).toEqual([]);
+  });
+
+  it('names a sub-cent price, which is what broke consultation checkout', async () => {
+    // The real incident: STRIPE_CONSULT_PRICE_ID pointed at a Price whose
+    // unit_amount_decimal was "0.1" — a TENTH of a cent, A$0.001. It reads
+    // exactly like "10 cents", looks fine in the dashboard, and Stripe only
+    // rejects it at session creation.
+    pricesRetrieve.mockResolvedValue({
+      ...GOOD_PRICE,
+      unit_amount: 0,
+      unit_amount_decimal: '0.1',
+    });
+
+    await service.onModuleInit();
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('fraction of a cent');
+    // Must tell the operator a new Price is required — Stripe Prices are
+    // immutable, so "fix the amount" is not actionable advice.
+    expect(errors[0]).toContain('stripe prices create --product=prod_123');
+    expect(errors[0]).toContain('--currency=aud');
+  });
+
+  it('handles unit_amount_decimal arriving as a Decimal object, not a string', async () => {
+    // Typed as Stripe's branded Decimal in SDK v22 but sent as a plain JSON
+    // string by the v1 REST API. Reading it with String() has to survive both.
+    pricesRetrieve.mockResolvedValue({
+      ...GOOD_PRICE,
+      unit_amount_decimal: { toString: () => '0.1' },
+    });
+
+    await service.onModuleInit();
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('fraction of a cent');
+  });
+
+  it('catches a price under Stripe’s minimum charge for its currency', async () => {
+    // The obvious "fix" for the sub-cent price is unit_amount: 1. That is
+    // A$0.01, still under Stripe's A$0.50 minimum, and fails just as late.
+    pricesRetrieve.mockResolvedValue({
+      ...GOOD_PRICE,
+      unit_amount: 1,
+      unit_amount_decimal: '1',
+    });
+
+    await service.onModuleInit();
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('50-cent minimum');
+  });
+
+  it('catches an archived price', async () => {
+    pricesRetrieve.mockResolvedValue({ ...GOOD_PRICE, active: false });
+    await service.onModuleInit();
+    expect(errors[0]).toContain('archived');
+  });
+
+  it('catches a recurring price used for a one-off charge', async () => {
+    pricesRetrieve.mockResolvedValue({ ...GOOD_PRICE, type: 'recurring' });
+    await service.onModuleInit();
+    expect(errors[0]).toContain('recurring price');
+  });
+
+  it('catches a tiered price, which has no flat amount to charge', async () => {
+    pricesRetrieve.mockResolvedValue({
+      ...GOOD_PRICE,
+      unit_amount: null,
+      unit_amount_decimal: null,
+    });
+    await service.onModuleInit();
+    expect(errors[0]).toContain('tiered or metered');
+  });
+
+  it('reports a definite Stripe refusal as a misconfiguration', async () => {
+    // Stripe answered and said no — wrong account, revoked key, deleted price.
+    pricesRetrieve.mockRejectedValue(
+      Object.assign(new Error('No such price'), {
+        type: 'StripeInvalidRequestError',
+      }),
+    );
+
+    await service.onModuleInit();
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('will not return it');
+  });
+
+  it('does NOT treat an unreachable Stripe as a misconfiguration', async () => {
+    // A boot-time network blip is not evidence the price is wrong, and must
+    // not fill the log with a false alarm operators will learn to ignore.
+    pricesRetrieve.mockRejectedValue(
+      Object.assign(new Error('socket hang up'), {
+        type: 'StripeConnectionError',
+      }),
+    );
+
+    await service.onModuleInit();
+
+    expect(errors).toEqual([]);
+    expect(warns).toHaveLength(1);
+  });
+
+  it('never throws, so a bad price cannot stop the rest of the API booting', async () => {
+    pricesRetrieve.mockRejectedValue(new Error('boom'));
+    await expect(service.onModuleInit()).resolves.toBeUndefined();
+  });
+
+  it('does not call Stripe at all when the id is already known to be wrong', async () => {
+    // The constructor has already said so, loudly. A second opinion costs a
+    // round trip on every cold start and adds nothing.
+    await build({ ...CONFIG, 'integrations.stripe.consultPriceId': '0.01' });
+    await service.onModuleInit();
+    expect(pricesRetrieve).not.toHaveBeenCalled();
   });
 });
