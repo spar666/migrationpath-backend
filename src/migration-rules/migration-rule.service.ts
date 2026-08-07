@@ -20,7 +20,10 @@ export class MigrationRuleService {
     return this.repo.findById(id);
   }
 
-  async update(id: string, dto: UpdateMigrationRuleDto): Promise<MigrationRule> {
+  async update(
+    id: string,
+    dto: UpdateMigrationRuleDto,
+  ): Promise<MigrationRule> {
     return this.repo.update(id, dto as any);
   }
 

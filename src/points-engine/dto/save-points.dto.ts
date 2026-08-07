@@ -2,7 +2,9 @@ import { IsString, IsInt, IsObject, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SavePointsDto {
-  @ApiProperty({ description: 'The selections/answers that produced this score' })
+  @ApiProperty({
+    description: 'The selections/answers that produced this score',
+  })
   @IsObject()
   selections: Record<string, any>;
 
@@ -10,7 +12,9 @@ export class SavePointsDto {
   @IsObject()
   breakdown: Record<string, any>;
 
-  @ApiProperty({ description: 'Persona type (student, skilled, onshore, etc.)' })
+  @ApiProperty({
+    description: 'Persona type (student, skilled, onshore, etc.)',
+  })
   @IsString()
   personaType: string;
 }

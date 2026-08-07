@@ -27,6 +27,79 @@ import { ConsultationBookingRepository } from '../consultation/consultation.repo
  *     navigation and a browser navigation is not proof of payment — anyone can
  *     open the success URL directly.
  */
+/**
+ * Names the specific mistake, because "not a Price id" is true but unhelpful
+ * and there are only two ways to get this wrong.
+ *
+ * Both are easy: the Product id sits next to the Price id on the same dashboard
+ * page, and the env var reads like it wants a fee.
+ */
+function explainBadPriceId(value: string): string {
+  if (value.startsWith('prod_')) {
+    return (
+      `That is the PRODUCT id — the Price id sits next to it on the same page. ` +
+      `Run \`stripe prices list --product=${value}\` and use the "price_..." id ` +
+      `it returns, or create one with ` +
+      `\`stripe prices create --product=${value} --unit-amount=<cents> --currency=aud\`.`
+    );
+  }
+
+  if (/^[\d.,]+$/.test(value.trim())) {
+    return (
+      `That is an amount. The fee lives in Stripe as a Price object so the ` +
+      `client can never name a price — if it could, a consult could be bought ` +
+      `for a cent. Create a Product and Price in Stripe and use the id.`
+    );
+  }
+
+  return (
+    `It must look like "price_1AbC...". Create a Product and Price in the ` +
+    `Stripe dashboard (or with \`stripe prices create\`) and use the id it returns.`
+  );
+}
+
+/**
+ * Did Stripe definitely refuse, or do we simply not know?
+ *
+ * The distinction decides whether a payment row can be written off. Stripe's
+ * SDK reports its own refusals with a `type` — an invalid request, a bad key —
+ * and those mean no session was created. A timeout, a socket reset or an
+ * unrecognised error means the request may well have succeeded with the answer
+ * lost in transit, and a session that exists is a session someone can pay.
+ *
+ * `StripeConnectionError` and `StripeAPIError` are explicitly NOT definite:
+ * both are raised for failures where Stripe may have processed the request.
+ */
+function isDefiniteStripeRejection(error: unknown): boolean {
+  const type = (error as { type?: unknown })?.type;
+  if (typeof type !== 'string') return false;
+
+  return (
+    type === 'StripeInvalidRequestError' ||
+    type === 'StripeAuthenticationError' ||
+    type === 'StripePermissionError' ||
+    type === 'StripeCardError' ||
+    type === 'StripeRateLimitError'
+  );
+}
+
+/**
+ * How long an unpaid checkout session is offered again instead of replaced.
+ *
+ * Stripe expires sessions after 24 hours by default. Staying inside that means
+ * a reused URL is one Stripe still recognises; past it, the reuse check would
+ * just be a round trip that always fails.
+ */
+const SESSION_REUSE_MS = 20 * 60 * 60 * 1000;
+
+/**
+ * How long before an unpaid session is swept up.
+ *
+ * Comfortably past Stripe's own expiry, so the sweep is tidying up settled
+ * cases rather than racing a visitor who is still deciding.
+ */
+export const STALE_SESSION_MS = 26 * 60 * 60 * 1000;
+
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
@@ -56,6 +129,23 @@ export class PaymentsService {
       // and then verify the webhook payload shape still matches.
       this.stripe = new Stripe(secretKey);
     }
+
+    // Checked at boot rather than only at checkout. A misconfigured price is
+    // invisible until someone tries to pay — which is the worst possible moment
+    // to discover it, and the one place nobody is watching the logs.
+    const priceId = this.configService.get<string>(
+      'integrations.stripe.consultPriceId',
+    );
+    if (priceId && !priceId.startsWith('price_')) {
+      this.logger.error(
+        `STRIPE_CONSULT_PRICE_ID is "${priceId}" — that is not a Stripe Price ` +
+          `id, so consultation checkout WILL fail. ${explainBadPriceId(priceId)}`,
+      );
+    } else if (!priceId) {
+      this.logger.warn(
+        'STRIPE_CONSULT_PRICE_ID is not set — consultation checkout is disabled.',
+      );
+    }
   }
 
   /**
@@ -73,6 +163,23 @@ export class PaymentsService {
     if (!priceId) {
       throw new ServiceUnavailableException(
         'The consultation fee has not been configured yet.',
+      );
+    }
+
+    // Caught here rather than left to Stripe, because Stripe's rejection
+    // arrives as a generic session-creation failure and the visitor is told to
+    // "try again shortly" — advice that can never work, for a fault entirely on
+    // our side. The mistake is an easy one: STRIPE_CONSULT_PRICE_ID looks like
+    // it wants a fee, and setting it to an amount (`0.01`) is the obvious
+    // reading. It wants the id of a Price object created in Stripe.
+    if (!priceId.startsWith('price_')) {
+      this.logger.error(
+        `STRIPE_CONSULT_PRICE_ID is "${priceId}", which is not a Stripe Price ` +
+          `id. ${explainBadPriceId(priceId)}`,
+      );
+      throw new ServiceUnavailableException(
+        'The consultation fee is not set up correctly. Please contact us and ' +
+          'quote your reference — we will take payment another way.',
       );
     }
 
@@ -94,9 +201,27 @@ export class PaymentsService {
 
     if (!booking) {
       // Book-then-pay: there should always be a pending booking by the time
-      // someone reaches checkout. If there isn't, the funnel was skipped.
+      // someone reaches checkout.
+      //
+      // The overwhelmingly likely cause is timing, not a skipped funnel. The
+      // booking row is written by Calendly's invitee webhook, a server-to-server
+      // call that races the visitor's own browser — so someone who books and
+      // immediately pays can get here first. The old wording ("choose a
+      // consultation time before paying") told exactly that person that the
+      // time they had just chosen did not count, which is both wrong and the
+      // most alarming possible reading.
+      //
+      // Logged as a warning because the other cause — a webhook that is not
+      // reaching us at all — looks identical from here and is worth noticing
+      // in aggregate.
+      this.logger.warn(
+        `Checkout attempted for prospect ${prospect.human_ref} with no booking. ` +
+          `Usually the Calendly invitee webhook has not landed yet; if this is ` +
+          `frequent, check the webhook subscription is live.`,
+      );
       throw new BadRequestException(
-        'Choose a consultation time before paying to confirm it.',
+        'We are still registering the time you picked. Give it a few seconds ' +
+          'and try again — if it keeps happening, contact us with your reference.',
       );
     }
 
@@ -110,6 +235,35 @@ export class PaymentsService {
       throw new ServiceUnavailableException(
         'Payment return URLs are not configured.',
       );
+    }
+
+    // Reuse a session already open for this booking rather than minting
+    // another.
+    //
+    // Every session we create is a live, chargeable link that stays valid until
+    // Stripe expires it. Someone who reloads this page, or whose first attempt
+    // died between our row being written and Stripe's answer arriving, would
+    // otherwise be handed a second one — and both remain payable. Two live
+    // links for one consultation is a refund conversation waiting to happen.
+    const open = await this.paymentRepository.findOpenSessionForBooking(
+      booking.id,
+      SESSION_REUSE_MS,
+    );
+    if (open?.provider_session_id) {
+      const reusable = await this.retrieveReusableSession(
+        stripe,
+        open.provider_session_id,
+      );
+      if (reusable) {
+        this.logger.log(
+          `Reusing open checkout session ${open.provider_session_id} for ` +
+            `prospect ${prospect.human_ref}`,
+        );
+        return { checkout_url: reusable, payment_id: open.id };
+      }
+      // Stripe has expired or completed it. Close our row off so the sweep and
+      // the next reuse check both stop considering it.
+      await this.paymentRepository.update(open.id, { status: 'expired' });
     }
 
     // Write the local row FIRST, in `created`. If Stripe succeeds and our
@@ -153,19 +307,47 @@ export class PaymentsService {
         },
       );
 
-      if (!session.url) {
-        throw new Error('Stripe returned a session without a URL');
-      }
-
+      // Record the session BEFORE checking it is usable. A session with no URL
+      // is useless to us and still perfectly payable at Stripe — it is a real
+      // object that exists in their system. Throwing without storing the id
+      // would leave a row nothing could ever match a payment to.
       await this.paymentRepository.update(payment.id, {
         provider_session_id: session.id,
         amount_cents: session.amount_total ?? null,
         currency: session.currency ?? 'aud',
       });
 
+      if (!session.url) {
+        throw new Error(
+          `Stripe returned session ${session.id} without a URL — recorded so ` +
+            `reconciliation can resolve it.`,
+        );
+      }
+
       return { checkout_url: session.url, payment_id: payment.id };
     } catch (error) {
-      await this.paymentRepository.update(payment.id, { status: 'failed' });
+      // Whether this row may be written off depends on WHY the call failed,
+      // and the two cases are not close.
+      //
+      // Stripe rejected the request — bad price, bad key — and no session
+      // exists. Marking it failed is correct and keeps it out of the sweep.
+      //
+      // The call timed out, or the connection dropped, and we do not know. A
+      // session may well have been created and be sitting there payable. It
+      // used to be marked failed regardless, which took it out of the
+      // reconciliation sweep entirely: the visitor could then pay through a
+      // session we had already written off, and nothing would ever confirm it.
+      // Left in `created`, the sweep asks Stripe what really happened.
+      if (isDefiniteStripeRejection(error)) {
+        await this.paymentRepository.update(payment.id, { status: 'failed' });
+      } else {
+        this.logger.warn(
+          `Checkout for ${prospect.human_ref} failed without a definite answer ` +
+            `from Stripe. Leaving payment ${payment.id} open so reconciliation ` +
+            `can check whether a session was created.`,
+        );
+      }
+
       this.logger.error(
         `Failed to create Stripe checkout session for prospect ${prospect.human_ref}: ${(error as Error).message}`,
       );
@@ -178,8 +360,19 @@ export class PaymentsService {
   /**
    * Marks a payment paid. Called ONLY from the verified Stripe webhook.
    *
-   * Returns null when the session has already been recorded as paid, so the
-   * caller can skip the side effects (booking flip, agent alert) on a replay.
+   * Returns the payment so the caller can run its side effects — flipping the
+   * booking, advancing the prospect, alerting the agent. Returns null only when
+   * there is nothing to act on at all.
+   *
+   * ⚠️ It deliberately does NOT return null just because the payment was
+   * already marked paid. That was the old behaviour and it hid a real loss:
+   * marking paid and confirming the booking are separate writes, so a restart
+   * between them left the money taken and the booking pending, and every retry
+   * afterwards saw `status = 'paid'`, returned null, and skipped the very work
+   * that had not happened. Being paid is a fact about this row; whether the
+   * booking was confirmed is a fact about a different one, and only the caller
+   * can check the second. The side effects are individually idempotent, so
+   * running them again on a genuine replay is harmless.
    */
   async markPaidFromSession(session: {
     id: string;
@@ -188,24 +381,49 @@ export class PaymentsService {
     currency?: string | null;
     metadata?: Record<string, string> | null;
   }): Promise<Payment | null> {
-    const existing = await this.paymentRepository.findBySessionId(session.id);
+    // Two ways to find our row, and the second is not redundant.
+    //
+    // Normally the session id is on it. But if the create call timed out after
+    // Stripe had built the session, we never stored the id — and the row sits
+    // in `created`, invisible to a session-id lookup, while the visitor pays
+    // through a session that genuinely exists. Falling straight through to the
+    // metadata branch below would then create a SECOND payment row for one
+    // payment, leaving the original stranded as unpaid forever.
+    //
+    // `payment_id` is put in the session metadata at creation precisely so this
+    // is recoverable.
+    const existing =
+      (await this.paymentRepository.findBySessionId(session.id)) ??
+      (await this.findByMetadataPaymentId(session.metadata?.payment_id));
 
     if (existing?.status === 'paid') {
       this.logger.log(
-        `Stripe session ${session.id} already recorded as paid — ignoring replay`,
+        `Stripe session ${session.id} is already paid — re-running the ` +
+          `confirmation so anything left unfinished last time completes.`,
       );
-      return null;
+      return existing;
     }
 
     if (existing) {
-      return this.paymentRepository.update(existing.id, {
-        status: 'paid',
-        provider_payment_intent_id: session.payment_intent ?? null,
-        amount_cents: session.amount_total ?? existing.amount_cents ?? null,
-        currency: session.currency ?? existing.currency,
-        paid_at: new Date(),
-        provider_metadata: session.metadata ?? undefined,
-      });
+      // Payment and booking move together. The gap between them is the one
+      // state nothing can explain afterwards — money taken, booking pending,
+      // no error anywhere — so it is closed rather than monitored.
+      return this.paymentRepository.markPaidWithBooking(
+        existing.id,
+        existing.booking_id ?? null,
+        {
+          status: 'paid',
+          // Backfilled here for the row we found by metadata rather than by
+          // session id: without it the row stays unmatchable by session for
+          // every future replay, and the reconciliation sweep cannot see it.
+          provider_session_id: session.id,
+          provider_payment_intent_id: session.payment_intent ?? null,
+          amount_cents: session.amount_total ?? existing.amount_cents ?? null,
+          currency: session.currency ?? existing.currency,
+          paid_at: new Date(),
+          provider_metadata: session.metadata ?? undefined,
+        },
+      );
     }
 
     // No local row: the session was created outside this service, or our row
@@ -235,8 +453,176 @@ export class PaymentsService {
     });
   }
 
+  /**
+   * Closes off a session that ended without a payment.
+   *
+   * Refuses to touch a row already marked `paid`. Events can arrive out of
+   * order, and an `expired` for a session that settled first would otherwise
+   * un-pay a real payment — the one write in this file that could lose money
+   * rather than merely fail to record it.
+   *
+   * Returns null when there is nothing to update, so the caller can say so
+   * rather than assuming success.
+   */
+  async markSessionUnpaid(
+    sessionId: string,
+    outcome: 'failed' | 'expired',
+  ): Promise<Payment | null> {
+    const existing = await this.paymentRepository.findBySessionId(sessionId);
+    if (!existing) return null;
+
+    if (existing.status === 'paid') {
+      this.logger.warn(
+        `Ignoring "${outcome}" for session ${sessionId}: the payment is ` +
+          `already recorded as paid. Events arrived out of order.`,
+      );
+      return existing;
+    }
+
+    return this.paymentRepository.update(existing.id, { status: outcome });
+  }
+
+  /**
+   * Asks Stripe what actually happened to one open session.
+   *
+   * The reconciliation sweep's per-row work. Three outcomes:
+   *
+   *   recovered — Stripe says it was paid. The webhook never reached us, so
+   *               the payment is confirmed here instead. This is the case that
+   *               matters: a customer charged for a booking that was never
+   *               confirmed.
+   *   expired   — Stripe agrees nobody paid. Safe to close off.
+   *   open      — still live. Left alone.
+   *
+   * Confirmation is delegated to the same handler the webhook uses, rather than
+   * reimplemented. Two code paths that both confirm bookings would drift, and
+   * the one used less often would be the one that drifted.
+   */
+  async reconcileSession(
+    paymentId: string,
+    sessionId: string,
+  ): Promise<'recovered' | 'expired' | 'open'> {
+    const stripe = this.requireStripe();
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    const isPaid =
+      session.payment_status === 'paid' ||
+      session.payment_status === 'no_payment_required';
+
+    if (isPaid) {
+      this.logger.warn(
+        `Session ${sessionId} is paid at Stripe but our payment ${paymentId} ` +
+          `was still open — the webhook never arrived. Confirming it now.`,
+      );
+
+      // Handed to the confirm callback rather than done here, so that the
+      // booking flip, the stage advance and the agent alert all happen exactly
+      // as they would have.
+      await this.confirmFromReconciliation?.({
+        id: session.id,
+        payment_intent:
+          typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : (session.payment_intent?.id ?? null),
+        amount_total: session.amount_total,
+        currency: session.currency,
+        metadata: session.metadata,
+      });
+
+      return 'recovered';
+    }
+
+    if (session.status === 'open') return 'open';
+
+    // Stripe has closed it and no money moved. Marking it expired keeps it out
+    // of future sweeps and out of the session-reuse lookup.
+    await this.paymentRepository.update(paymentId, { status: 'expired' });
+    return 'expired';
+  }
+
+  /**
+   * How a recovered payment gets confirmed.
+   *
+   * Injected by WebhooksModule at boot rather than imported, because
+   * WebhooksService already depends on PaymentsService — importing it back
+   * would make the module graph circular. A callback keeps the dependency
+   * one-way and the confirmation logic in exactly one place.
+   */
+  private confirmFromReconciliation?: (session: {
+    id: string;
+    payment_intent?: string | null;
+    amount_total?: number | null;
+    currency?: string | null;
+    metadata?: Record<string, string> | null;
+  }) => Promise<void>;
+
+  setReconciliationConfirmer(
+    confirm: (session: {
+      id: string;
+      payment_intent?: string | null;
+      amount_total?: number | null;
+      currency?: string | null;
+      metadata?: Record<string, string> | null;
+    }) => Promise<void>,
+  ): void {
+    this.confirmFromReconciliation = confirm;
+  }
+
+  /**
+   * Looks up the payment row named in a Stripe session's metadata.
+   *
+   * Tolerant of a missing or unrecognised id: metadata is data we put there
+   * ourselves, but the session may predate the field, or have been created by
+   * hand in the dashboard. Returning null lets the caller fall through to
+   * recording the payment fresh, which is the right outcome — an orphan row is
+   * recoverable, a dropped payment is not.
+   */
+  private async findByMetadataPaymentId(
+    paymentId?: string,
+  ): Promise<Payment | null> {
+    if (!paymentId) return null;
+
+    try {
+      return await this.paymentRepository.findById(paymentId);
+    } catch {
+      this.logger.warn(
+        `Stripe session names payment ${paymentId}, which does not exist here.`,
+      );
+      return null;
+    }
+  }
+
   findForProspect(prospectId: string): Promise<Payment[]> {
     return this.paymentRepository.findByProspectId(prospectId);
+  }
+
+  /**
+   * The URL of an existing session, if it is still usable.
+   *
+   * Returns null for anything already paid, expired or gone — handing back a
+   * dead link looks to the visitor exactly like a broken pay button, which is
+   * worse than the duplicate session reuse was meant to avoid.
+   *
+   * A Stripe outage here returns null too. Falling back to creating a fresh
+   * session risks a second live link; refusing to take the payment at all
+   * guarantees a lost one. The second is worse, and the duplicate is visible
+   * and refundable.
+   */
+  private async retrieveReusableSession(
+    stripe: Stripe,
+    sessionId: string,
+  ): Promise<string | null> {
+    try {
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      if (session.status !== 'open' || !session.url) return null;
+      return session.url;
+    } catch (error) {
+      this.logger.warn(
+        `Could not check existing session ${sessionId}, creating a new one: ` +
+          `${(error as Error).message}`,
+      );
+      return null;
+    }
   }
 
   private requireStripe(): Stripe {

@@ -7,7 +7,9 @@ export class UpdatePolicyConfigDto {
   @IsOptional()
   numericValue?: number;
 
-  @ApiPropertyOptional({ description: 'Cross-check source (instrument name / URL / note)' })
+  @ApiPropertyOptional({
+    description: 'Cross-check source (instrument name / URL / note)',
+  })
   @IsString()
   @IsOptional()
   sourceNote?: string;

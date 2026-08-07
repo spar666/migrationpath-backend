@@ -216,7 +216,10 @@ export function computeClientFit(input: ClientFitInput): ClientFitResult {
   const reasons: string[] = [];
   let fit = true;
 
-  if (input.subclass && !CLIENT_FIT.servicedSubclasses.includes(input.subclass)) {
+  if (
+    input.subclass &&
+    !CLIENT_FIT.servicedSubclasses.includes(input.subclass)
+  ) {
     fit = false;
     reasons.push(
       `We do not currently service subclass ${input.subclass} matters.`,

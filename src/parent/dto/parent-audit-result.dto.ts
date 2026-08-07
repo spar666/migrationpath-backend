@@ -34,7 +34,9 @@ export class ParentAuditResultDto {
   @ApiProperty()
   auditId: string;
 
-  @ApiProperty({ description: 'Overall eligibility flag (Gates 1 and 2 both pass)' })
+  @ApiProperty({
+    description: 'Overall eligibility flag (Gates 1 and 2 both pass)',
+  })
   isEligible: boolean;
 
   @ApiProperty({ enum: ['LEGALLY_ELIGIBLE', 'LEGALLY_INELIGIBLE'] })
@@ -46,7 +48,9 @@ export class ParentAuditResultDto {
   @ApiProperty({ description: 'Sponsor eligibility check (Gate 1)' })
   sponsorCheck: SponsorCheckResult;
 
-  @ApiProperty({ description: 'Assurance of Support income check (Gate 3, warning-only)' })
+  @ApiProperty({
+    description: 'Assurance of Support income check (Gate 3, warning-only)',
+  })
   aos: AosResult;
 
   @ApiProperty({ description: 'Predicted visa path based on age bracket' })

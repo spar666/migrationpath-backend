@@ -34,13 +34,17 @@ export class CreateLeadDto {
   @MaxLength(100)
   visa_type?: string;
 
-  @ApiPropertyOptional({ description: 'Free-text message / notes from the prospect' })
+  @ApiPropertyOptional({
+    description: 'Free-text message / notes from the prospect',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(2000)
   message?: string;
 
-  @ApiPropertyOptional({ description: 'Service package the lead was viewing, if any' })
+  @ApiPropertyOptional({
+    description: 'Service package the lead was viewing, if any',
+  })
   @IsOptional()
   @IsUUID()
   package_id?: string;

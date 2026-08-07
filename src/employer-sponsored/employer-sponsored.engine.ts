@@ -43,14 +43,26 @@ export interface SponsorFacts {
   meets_training_obligations?: boolean | null;
   state?: string;
   postcode?: string;
+  business_address?: string;
+  sponsored_last_5_years?: boolean | null;
+  is_standard_business_sponsor?: boolean | null;
+  annual_revenue_band?: string;
+  years_operating_band?: string;
+  operates_only_in_australia?: boolean | null;
+  employee_count_band?: string;
+  has_temporary_visa_employees?: boolean | null;
+  referral_source?: string;
 }
 
 /** The role being nominated. */
 export interface NominationFacts {
   occupation_code?: string;
   occupation_name?: string;
+  position_title?: string;
   subclass?: string;
   annual_salary?: number;
+  salary_band?: string;
+  candidate_current_pay_band?: string;
   work_state?: string;
   work_postcode?: string;
   is_regional?: boolean | null;
@@ -382,7 +394,10 @@ export class EmployerSponsoredEngine {
       );
     } else {
       passes.push('The nominated salary clears the income threshold.');
-      if (nomination.annual_salary < rule.minSalary / MARKET_RATE_WARNING_MARGIN) {
+      if (
+        nomination.annual_salary <
+        rule.minSalary / MARKET_RATE_WARNING_MARGIN
+      ) {
         unknowns.push(
           'The salary clears the statutory floor but sits close to it — the ' +
             'market salary rate test will need evidence.',
@@ -393,7 +408,9 @@ export class EmployerSponsoredEngine {
     // --- Regional ---
     if (rule.requiresRegional) {
       if (nomination.is_regional == null) {
-        cannotDetermine('Whether the work location is regional was not confirmed.');
+        cannotDetermine(
+          'Whether the work location is regional was not confirmed.',
+        );
       } else if (!nomination.is_regional) {
         blockers.push(
           `${rule.label} requires the position to be in a designated regional area.`,
@@ -472,7 +489,9 @@ export class EmployerSponsoredEngine {
 
     if (sponsor.years_trading == null) {
       findings.push('How long the business has been trading was not provided.');
-    } else if (sponsor.years_trading < SPONSOR_RULES.minYearsTradingForStandard) {
+    } else if (
+      sponsor.years_trading < SPONSOR_RULES.minYearsTradingForStandard
+    ) {
       findings.push(
         `The business has been trading for under ` +
           `${SPONSOR_RULES.minYearsTradingForStandard} year(s), which limits the ` +

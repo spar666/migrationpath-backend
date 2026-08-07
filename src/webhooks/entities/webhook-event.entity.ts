@@ -64,6 +64,32 @@ export class WebhookEvent {
   @Column({ type: 'timestamptz', nullable: true })
   processed_at?: Date | null;
 
+  /**
+   * When this delivery was last picked up for processing.
+   *
+   * The lease that makes a crash survivable. A row sitting in `received` means
+   * one of two things — a handler is running right now, or a handler died
+   * partway through — and the two are indistinguishable from the row alone.
+   * The timestamp separates them: recent means in flight, stale means abandoned
+   * and safe to retry.
+   *
+   * Without it, `claim` refused every delivery it had already seen, so a crash
+   * mid-handler meant Stripe's retries were all dropped: the payment was taken,
+   * the booking never confirmed, and nothing in the system disagreed.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  claimed_at?: Date | null;
+
+  /**
+   * How many times we have started handling this delivery.
+   *
+   * Above one means something went wrong the first time. Worth surfacing:
+   * a payment that needed three attempts to confirm is fine, and a payment
+   * that has needed thirty is an outage nobody has noticed.
+   */
+  @Column({ type: 'int', default: 0 })
+  attempts: number;
+
   @CreateDateColumn()
   created_at: Date;
 }

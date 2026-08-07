@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Prospect } from './entities/prospect.entity';
 import { ProspectSummary } from './entities/prospect-summary.entity';
+import { Payment } from '../payments/entities/payment.entity';
 import { ProspectRepository } from './prospect.repository';
 import { ProspectSummaryRepository } from './prospect-summary.repository';
 import { ProspectService } from './prospect.service';
@@ -23,7 +24,7 @@ import { ConsultationModule } from '../consultation/consultation.module';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Prospect, ProspectSummary]),
+    TypeOrmModule.forFeature([Prospect, ProspectSummary, Payment]),
     EmployerSponsoredModule,
     ConsultationModule,
   ],

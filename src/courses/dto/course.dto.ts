@@ -18,15 +18,23 @@ export class CreateCourseDto {
   @IsString()
   courseTitle: string;
 
-  @ApiPropertyOptional({ example: '261313', description: 'Links the course to an occupation in the master' })
+  @ApiPropertyOptional({
+    example: '261313',
+    description: 'Links the course to an occupation in the master',
+  })
   @IsString()
   @IsOptional()
   anzscoCode?: string;
 
-  @ApiPropertyOptional({ example: '3220', description: '4-digit campus postcode (drives regional +5)' })
+  @ApiPropertyOptional({
+    example: '3220',
+    description: '4-digit campus postcode (drives regional +5)',
+  })
   @IsString()
   @IsOptional()
-  @Matches(/^\d{3,4}$/, { message: 'campusPostcode must be a 3-4 digit postcode' })
+  @Matches(/^\d{3,4}$/, {
+    message: 'campusPostcode must be a 3-4 digit postcode',
+  })
   campusPostcode?: string;
 
   @ApiPropertyOptional({ example: true })

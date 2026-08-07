@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateVisasAndOccupationVisas1788000000000
-  implements MigrationInterface
-{
+export class CreateVisasAndOccupationVisas1788000000000 implements MigrationInterface {
   name = 'CreateVisasAndOccupationVisas1788000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -123,11 +121,17 @@ export class CreateVisasAndOccupationVisas1788000000000
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Reverse order.
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_occupation_visas_visa_id";`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_occupation_visas_anzsco";`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_occupation_visas_visa_id";`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_occupation_visas_anzsco";`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "occupation_visas";`);
 
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_visas_subclass_number";`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_visas_subclass_number";`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "visas";`);
     await queryRunner.query(`DROP TYPE IF EXISTS "visas_residency_type_enum";`);
 

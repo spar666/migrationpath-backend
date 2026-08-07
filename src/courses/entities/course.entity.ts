@@ -27,7 +27,12 @@ export class Course {
    * Postcode of the teaching campus. This is the ONLY input that determines
    * regional status; there is no manual isRegional override.
    */
-  @Column({ name: 'campus_postcode', type: 'varchar', length: 4, nullable: true })
+  @Column({
+    name: 'campus_postcode',
+    type: 'varchar',
+    length: 4,
+    nullable: true,
+  })
   campusPostcode: string | null;
 
   /**

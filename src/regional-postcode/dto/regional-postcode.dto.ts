@@ -13,7 +13,11 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 
-export const REGIONAL_CATEGORIES = ['METRO', 'CATEGORY_2', 'CATEGORY_3'] as const;
+export const REGIONAL_CATEGORIES = [
+  'METRO',
+  'CATEGORY_2',
+  'CATEGORY_3',
+] as const;
 
 export class CreateRegionalBandDto {
   @ApiProperty({ example: 'Geelong' })

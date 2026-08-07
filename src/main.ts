@@ -37,7 +37,12 @@ async function bootstrap() {
   // matters to per-IP rate limiting) ---
   const trustProxy = configService.get<string>('app.trustProxy', 'false');
   if (trustProxy !== 'false') {
-    const value = trustProxy === 'true' ? 1 : isNaN(Number(trustProxy)) ? trustProxy : Number(trustProxy);
+    const value =
+      trustProxy === 'true'
+        ? 1
+        : isNaN(Number(trustProxy))
+          ? trustProxy
+          : Number(trustProxy);
     app.set('trust proxy', value);
   }
 

@@ -24,9 +24,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * Do NOT "fix" it by switching the whole run to transactionMode 'none'.
  */
-export class AddProspectBookingPayment1799000000000
-  implements MigrationInterface
-{
+export class AddProspectBookingPayment1799000000000 implements MigrationInterface {
   name = 'AddProspectBookingPayment1799000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

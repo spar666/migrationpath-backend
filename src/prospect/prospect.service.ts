@@ -142,11 +142,17 @@ export class ProspectService {
   }
 
   async linkSponsor(prospectId: string, sponsorId: string): Promise<Prospect> {
-    return this.prospectRepository.update(prospectId, { sponsor_id: sponsorId });
+    return this.prospectRepository.update(prospectId, {
+      sponsor_id: sponsorId,
+    });
   }
 
-  async list(page = 1, limit = 20, filters?: { stage?: ProspectStage; party?: ProspectParty }) {
-    return this.prospectRepository.paginate(page, limit, filters as any);
+  async list(
+    page = 1,
+    limit = 20,
+    filters?: { stage?: ProspectStage; party?: ProspectParty },
+  ) {
+    return this.prospectRepository.paginate(page, limit, filters);
   }
 
   /**
@@ -212,6 +218,74 @@ export class ProspectService {
     };
   }
 
+  /**
+   * Records a booking the prospect's own browser just watched Calendly confirm.
+   *
+   * This exists because the invitee webhook is not reliably available at the
+   * moment it is needed. It is a server-to-server call: late under load, silent
+   * when the subscription or signing key is wrong, and impossible in local
+   * development where Calendly has no public URL to deliver to. Without a
+   * booking row, checkout has nothing to attach the payment to and rejects the
+   * request — so a webhook problem reaches the visitor as "we have no record of
+   * the time you just booked".
+   *
+   * What this endpoint is trusted for is narrow, and deliberately so. It
+   * creates a PENDING booking and nothing else. It cannot confirm anything —
+   * that remains Stripe's webhook alone — and it cannot move the prospect
+   * forward. The worst a stranger holding both identifiers can do is add an
+   * unpaid row to the agent's follow-up queue.
+   *
+   * The details it stores are the browser's account of events and are treated
+   * as provisional: `client_reported_at` marks the row so the invitee webhook
+   * overwrites them with Calendly's own data when it arrives.
+   */
+  async reportBooking(
+    prospectId: string,
+    humanRef: string,
+    details: {
+      inviteeUri?: string;
+      eventUri?: string;
+      startsAt?: string;
+      endsAt?: string;
+    } = {},
+  ) {
+    // Validates identity and 404s on a mismatch before anything is written.
+    const status = await this.getPublicStatus(prospectId, humanRef);
+
+    // Already have a slot: the webhook beat us, or this is a double-report from
+    // a re-rendered page. Either way, creating a second row for one booking
+    // would leave the agent guessing which is real.
+    if (status.booking) {
+      return status;
+    }
+
+    const startsAt = toDateOrNull(details.startsAt);
+
+    await this.bookingRepository.create({
+      prospect_id: prospectId,
+      user_id: null,
+      status: 'pending',
+      scheduler_provider: 'calendly',
+      // Only set when the browser actually saw it. A synthetic value here would
+      // break the webhook's idempotency key, which is the real invitee URI.
+      scheduler_event_id: details.inviteeUri ?? null,
+      scheduler_invitee_id: details.eventUri ?? null,
+      scheduled_at: startsAt,
+      scheduled_end_at: toDateOrNull(details.endsAt),
+      client_reported_at: new Date(),
+    });
+
+    this.logger.log(
+      `Booking reported by the browser for prospect ${humanRef}` +
+        `${startsAt ? ` at ${startsAt.toISOString()}` : ''}. ` +
+        `Awaiting the Calendly webhook to confirm the detail.`,
+    );
+
+    await this.summaryService.refresh(prospectId);
+
+    return this.getPublicStatus(prospectId, humanRef);
+  }
+
   // -------------------------------------------------------------------------
 
   /**
@@ -244,6 +318,13 @@ export class ProspectService {
  * because it is terminal — an agent marking someone disqualified should not
  * be undone by a late webhook.
  */
+/** Parses an ISO string the browser supplied, refusing anything unparseable. */
+function toDateOrNull(value?: string): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 const STAGE_ORDER: Record<ProspectStage, number> = {
   captured: 0,
   pre_screened: 1,

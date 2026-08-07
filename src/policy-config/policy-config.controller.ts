@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Put,
-  Param,
-  Body,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Put, Param, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -28,7 +21,9 @@ export class PolicyConfigController {
   }
 
   @Put(':key')
-  @ApiOperation({ summary: 'Update a legislative constant (value / source / effective date)' })
+  @ApiOperation({
+    summary: 'Update a legislative constant (value / source / effective date)',
+  })
   update(@Param('key') key: string, @Body() dto: UpdatePolicyConfigDto) {
     return this.policyConfigService.update(key, dto);
   }

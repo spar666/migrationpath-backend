@@ -1,4 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Payment } from '../payments/entities/payment.entity';
 import { ProspectSummaryRepository } from './prospect-summary.repository';
 import { ProspectRepository } from './prospect.repository';
 import { ProspectSummary } from './entities/prospect-summary.entity';
@@ -39,6 +42,11 @@ export class ProspectSummaryService {
     private readonly sponsorRepository: SponsorRepository,
     private readonly nominationRepository: NominationRepository,
     private readonly bookingRepository: ConsultationBookingRepository,
+    // The TypeORM repository rather than PaymentRepository: PaymentsModule
+    // already imports ProspectModule, so depending on it here would close the
+    // loop. The entity is all this needs.
+    @InjectRepository(Payment)
+    private readonly payments: Repository<Payment>,
   ) {}
 
   get(prospectId: string): Promise<ProspectSummary | null> {
@@ -67,6 +75,7 @@ export class ProspectSummaryService {
 
       const sponsorship = await this.buildSponsorship(prospect.sponsor_id);
       const booking = patch.booking ?? (await this.buildBooking(prospectId));
+      const payment = patch.payment ?? (await this.buildPayment(prospectId));
 
       const eligibility =
         patch.eligibility ??
@@ -98,7 +107,7 @@ export class ProspectSummaryService {
           : {}),
         ...(sponsorship ? { sponsorship } : {}),
         ...(booking ? { booking } : {}),
-        ...(patch.payment !== undefined ? { payment: patch.payment } : {}),
+        ...(payment ? { payment } : {}),
       });
     } catch (error) {
       this.logger.error(
@@ -161,12 +170,47 @@ export class ProspectSummaryService {
     };
   }
 
+  /**
+   * The prospect's latest payment, read from the payments table.
+   *
+   * This existed only as a caller-supplied patch, written by exactly one code
+   * path — the Stripe webhook. Which contradicted the class comment: the
+   * summary is derived, and "if it is ever wrong, call refresh() again" was
+   * not true of this block. A prospect whose webhook failed showed "no payment
+   * recorded" in the agent view permanently, however many times it refreshed,
+   * because nothing could rebuild it from the source of truth.
+   *
+   * Now it works the same way as the booking block above.
+   */
+  private async buildPayment(
+    prospectId: string,
+  ): Promise<Record<string, any> | null> {
+    const [payment] = await this.payments.find({
+      where: { prospect_id: prospectId },
+      // A paid row is the answer whenever one exists, even if a later attempt
+      // was created afterwards — ordering by creation alone would let an
+      // abandoned retry hide a completed payment.
+      order: { paid_at: 'DESC', created_at: 'DESC' },
+      take: 1,
+    });
+
+    if (!payment) return null;
+
+    return {
+      payment_id: payment.id,
+      status: payment.status,
+      amount_cents: payment.amount_cents,
+      currency: payment.currency,
+      paid_at: payment.paid_at,
+    };
+  }
+
   private async buildBooking(
     prospectId: string,
   ): Promise<Record<string, any> | null> {
     const bookings = await this.bookingRepository.findAll({
       prospect_id: prospectId,
-    } as any);
+    });
     if (!bookings?.length) return null;
 
     // Most recent first — a rescheduled prospect has more than one row.
@@ -182,6 +226,13 @@ export class ProspectSummaryService {
       join_url: booking.join_url,
       reschedule_url: booking.reschedule_url,
       cancel_url: booking.cancel_url,
+      // What they typed into Calendly, which is not necessarily the address
+      // they enquired with. People book with a work email having enquired from
+      // a personal one, and that mismatch is the usual reason a booking cannot
+      // be tied to an enquiry by hand — so it is shown rather than assumed
+      // away. Also the ONLY contact detail an unlinked booking has.
+      invitee_email: booking.invitee_email,
+      invitee_name: booking.invitee_name,
     };
   }
 }

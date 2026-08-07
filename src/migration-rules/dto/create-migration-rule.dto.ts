@@ -1,4 +1,10 @@
-import { IsString, IsOptional, IsBoolean, IsNotEmpty, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsNotEmpty,
+  IsIn,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateMigrationRuleDto {

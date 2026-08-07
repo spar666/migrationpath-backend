@@ -9,7 +9,12 @@ import {
   UseGuards,
   Query,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { MigrationRuleService } from './migration-rule.service';
 import { CreateMigrationRuleDto } from './dto/create-migration-rule.dto';
 import { UpdateMigrationRuleDto } from './dto/update-migration-rule.dto';

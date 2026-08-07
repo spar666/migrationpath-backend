@@ -12,6 +12,7 @@ import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ProspectService } from './prospect.service';
 import { CreateProspectDto } from './dto/create-prospect.dto';
+import { ReportBookingDto } from './dto/report-booking.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -67,6 +68,37 @@ export class ProspectController {
     return this.prospectService.getPublicStatus(id, ref);
   }
 
+  /**
+   * PUBLIC, double-keyed the same way as /status.
+   *
+   * The browser reporting a slot it just watched Calendly confirm. This is what
+   * stops a late, misconfigured or (in local development) undeliverable invitee
+   * webhook from presenting to the visitor as "we have no record of the time
+   * you just booked" when they try to pay.
+   *
+   * Safe to expose anonymously because of what it cannot do: it creates a
+   * PENDING booking and nothing more. Confirming a consultation remains
+   * Stripe's webhook alone, so the worst outcome available here is an unpaid
+   * row in the agent's follow-up queue.
+   */
+  @Post(':id/booking')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Report a consultation slot confirmed in the browser (public)',
+  })
+  reportBooking(
+    @Param('id') id: string,
+    @Query('ref') ref: string,
+    @Body() dto: ReportBookingDto,
+  ) {
+    return this.prospectService.reportBooking(id, ref, {
+      inviteeUri: dto.invitee_uri,
+      eventUri: dto.event_uri,
+      startsAt: dto.starts_at,
+      endsAt: dto.ends_at,
+    });
+  }
+
   // --- Agent-facing, admin only ---
 
   @Get()
@@ -85,7 +117,7 @@ export class ProspectController {
     return this.prospectService.list(
       query.page ?? 1,
       query.limit ?? 20,
-      filters as any,
+      filters,
     );
   }
 
@@ -97,7 +129,9 @@ export class ProspectController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  @ApiOperation({ summary: 'Get a prospect with its prep summary (admin only)' })
+  @ApiOperation({
+    summary: 'Get a prospect with its prep summary (admin only)',
+  })
   getOne(@Param('id') id: string) {
     return this.prospectService.getPrepView(id);
   }
@@ -106,7 +140,9 @@ export class ProspectController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  @ApiOperation({ summary: 'Look a prospect up by its human reference (admin only)' })
+  @ApiOperation({
+    summary: 'Look a prospect up by its human reference (admin only)',
+  })
   getByRef(@Param('humanRef') humanRef: string) {
     return this.prospectService.findByHumanRef(humanRef);
   }

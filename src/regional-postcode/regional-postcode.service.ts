@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RegionalPostcodeBand } from './entities/regional-postcode-band.entity';
@@ -25,14 +30,45 @@ export interface BandSet {
  */
 const STATIC_FALLBACK: BandSet = {
   metro: [
-    { region: 'Greater Sydney', ranges: [[2000, 2249], [2555, 2574], [2745, 2786]] },
-    { region: 'Greater Melbourne', ranges: [[3000, 3207], [3335, 3341], [3427, 3443], [3750, 3810], [3910, 3944], [3975, 3978], [8000, 8999]] },
-    { region: 'Greater Brisbane', ranges: [[4000, 4207], [4300, 4305], [4500, 4519]] },
+    {
+      region: 'Greater Sydney',
+      ranges: [
+        [2000, 2249],
+        [2555, 2574],
+        [2745, 2786],
+      ],
+    },
+    {
+      region: 'Greater Melbourne',
+      ranges: [
+        [3000, 3207],
+        [3335, 3341],
+        [3427, 3443],
+        [3750, 3810],
+        [3910, 3944],
+        [3975, 3978],
+        [8000, 8999],
+      ],
+    },
+    {
+      region: 'Greater Brisbane',
+      ranges: [
+        [4000, 4207],
+        [4300, 4305],
+        [4500, 4519],
+      ],
+    },
   ],
   cat2: [
     { region: 'Wollongong / Illawarra', ranges: [[2500, 2534]] },
     { region: 'Newcastle / Lake Macquarie', ranges: [[2280, 2310]] },
-    { region: 'Canberra (ACT)', ranges: [[2600, 2620], [2900, 2920]] },
+    {
+      region: 'Canberra (ACT)',
+      ranges: [
+        [2600, 2620],
+        [2900, 2920],
+      ],
+    },
     { region: 'Geelong', ranges: [[3211, 3230]] },
     { region: 'Gold Coast', ranges: [[4208, 4287]] },
     { region: 'Sunshine Coast', ranges: [[4550, 4575]] },

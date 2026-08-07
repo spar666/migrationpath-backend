@@ -23,7 +23,9 @@ export class PolicyConfigService {
   private async ensureLoaded(): Promise<Map<string, number>> {
     if (this.cache) return this.cache;
     const rows = await this.repo.find();
-    this.cache = new Map(rows.map((r) => [r.configKey, Number(r.numericValue)]));
+    this.cache = new Map(
+      rows.map((r) => [r.configKey, Number(r.numericValue)]),
+    );
     return this.cache;
   }
 
@@ -62,7 +64,8 @@ export class PolicyConfigService {
       throw new NotFoundException(`Policy config "${configKey}" not found`);
     }
 
-    if (dto.numericValue !== undefined) existing.numericValue = dto.numericValue;
+    if (dto.numericValue !== undefined)
+      existing.numericValue = dto.numericValue;
     if (dto.sourceNote !== undefined) existing.sourceNote = dto.sourceNote;
     if (dto.effectiveDate !== undefined) {
       existing.effectiveDate = dto.effectiveDate;

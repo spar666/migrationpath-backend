@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { createHmac } from 'crypto';
-import { WebhooksService } from './webhooks.service';
+import { WebhooksService, type CalendlyInvitee } from './webhooks.service';
 import { WebhookEventRepository } from './webhook-event.repository';
 import { ProspectService } from '../prospect/prospect.service';
 import { ProspectSummaryService } from '../prospect/prospect-summary.service';
@@ -37,12 +37,16 @@ describe('WebhooksService', () => {
   let prospects: { advanceStage: jest.Mock; findById: jest.Mock };
   let summaries: { get: jest.Mock; refresh: jest.Mock };
   let notifier: { notifyBookingConfirmed: jest.Mock };
-  let payments: { markPaidFromSession: jest.Mock };
+  let payments: {
+    markPaidFromSession: jest.Mock;
+    markSessionUnpaid: jest.Mock;
+  };
   let bookings: {
     create: jest.Mock;
     update: jest.Mock;
     findById: jest.Mock;
     findBySchedulerEventId: jest.Mock;
+    findClientReportedForProspect: jest.Mock;
     findLatestForProspect: jest.Mock;
   };
 
@@ -65,7 +69,10 @@ describe('WebhooksService', () => {
     notifier = {
       notifyBookingConfirmed: jest.fn().mockResolvedValue(undefined),
     };
-    payments = { markPaidFromSession: jest.fn() };
+    payments = {
+      markPaidFromSession: jest.fn(),
+      markSessionUnpaid: jest.fn().mockResolvedValue(null),
+    };
     bookings = {
       create: jest
         .fn()
@@ -73,6 +80,9 @@ describe('WebhooksService', () => {
       update: jest.fn().mockResolvedValue({}),
       findById: jest.fn().mockResolvedValue({ id: 'booking-1' }),
       findBySchedulerEventId: jest.fn().mockResolvedValue(null),
+      // Null by default: no browser-reported row to adopt, so invitee.created
+      // takes its original path of creating the booking outright.
+      findClientReportedForProspect: jest.fn().mockResolvedValue(null),
       findLatestForProspect: jest.fn().mockResolvedValue({ id: 'booking-1' }),
     };
 
@@ -202,6 +212,34 @@ describe('WebhooksService', () => {
 
     it('returns null for a payload with no invitee uri', () => {
       expect(service.mapCalendlyInvitee({ payload: {} })).toBeNull();
+    });
+
+    it('reads an invitee sent at the top level, not wrapped in payload', () => {
+      // Calendly nests under `payload` on some API versions and not on others,
+      // and only the wrapped shape was covered — so a refactor that broke the
+      // unwrapped one would have gone unnoticed until bookings stopped linking.
+      const mapped = service.mapCalendlyInvitee({
+        uri: 'https://api.calendly.com/invitees/9',
+        tracking: { utm_content: 'prospect-9' },
+      });
+
+      expect(mapped?.inviteeUri).toBe('https://api.calendly.com/invitees/9');
+      expect(mapped?.prospectId).toBe('prospect-9');
+    });
+
+    it('survives a payload whose nested objects are the wrong type', () => {
+      // Throwing here returns a 5xx, which earns a retry of a payload we will
+      // fail on identically every time.
+      expect(() =>
+        service.mapCalendlyInvitee({
+          payload: {
+            uri: 'https://api.calendly.com/invitees/9',
+            scheduled_event: 'not-an-object',
+            tracking: 42,
+            questions_and_answers: 'nope',
+          },
+        }),
+      ).not.toThrow();
       expect(service.mapCalendlyInvitee({})).toBeNull();
     });
 
@@ -225,7 +263,142 @@ describe('WebhooksService', () => {
       startsAt: '2026-08-01T02:00:00Z',
       endsAt: '2026-08-01T02:45:00Z',
       prospectId: 'prospect-1',
-    } as never;
+      // Typed rather than `as never`: the adoption tests read startsAt/endsAt
+      // back off this fixture to assert the webhook's values win.
+    } satisfies CalendlyInvitee;
+
+    /**
+     * The browser now reports the booking as soon as Calendly confirms it, so
+     * that checkout is not blocked waiting on this webhook. That means by the
+     * time the webhook lands there is often already a row for this slot — and
+     * the wrong move is to create a second one, leaving the agent with two
+     * bookings for one appointment and no way to tell which is real.
+     */
+    describe('when the browser reported the booking first', () => {
+      it('adopts the existing row rather than creating another', async () => {
+        bookings.findClientReportedForProspect.mockResolvedValue({
+          id: 'client-b1',
+          client_reported_at: new Date(),
+        });
+
+        await service.handleCalendlyInviteeCreated(invitee);
+
+        expect(bookings.create).not.toHaveBeenCalled();
+        expect(bookings.update).toHaveBeenCalledWith(
+          'client-b1',
+          expect.objectContaining({
+            scheduler_event_id: invitee.inviteeUri,
+          }),
+        );
+      });
+
+      it('fills in the contact details the browser could not see', async () => {
+        // Calendly's message to the embed carries URIs and times, not what the
+        // visitor typed into the form. This path is the only source for them.
+        bookings.findClientReportedForProspect.mockResolvedValue({
+          id: 'client-b1',
+          client_reported_at: new Date(),
+        });
+
+        await service.handleCalendlyInviteeCreated({
+          ...invitee,
+          email: 'mina@example.com',
+          name: 'Mina Chen',
+        });
+
+        expect(bookings.update.mock.calls[0][1]).toMatchObject({
+          invitee_email: 'mina@example.com',
+          invitee_name: 'Mina Chen',
+        });
+      });
+
+      it("overwrites the browser's times with Calendly's own", async () => {
+        // The browser reported what it was shown; Calendly reports what is
+        // booked. Only one of those is authoritative.
+        bookings.findClientReportedForProspect.mockResolvedValue({
+          id: 'client-b1',
+          client_reported_at: new Date(),
+        });
+
+        await service.handleCalendlyInviteeCreated(invitee);
+
+        const patch = bookings.update.mock.calls[0][1];
+        expect(patch.scheduled_at).toEqual(new Date(invitee.startsAt));
+        expect(patch.scheduled_end_at).toEqual(new Date(invitee.endsAt));
+      });
+
+      it('clears the client-reported flag once Calendly has confirmed it', async () => {
+        // From here the row is provider-confirmed and nothing downstream needs
+        // to treat its detail as provisional.
+        bookings.findClientReportedForProspect.mockResolvedValue({
+          id: 'client-b1',
+          client_reported_at: new Date(),
+        });
+
+        await service.handleCalendlyInviteeCreated(invitee);
+        expect(bookings.update.mock.calls[0][1].client_reported_at).toBeNull();
+      });
+
+      it('leaves it PENDING — an invitee webhook never means paid', async () => {
+        bookings.findClientReportedForProspect.mockResolvedValue({
+          id: 'client-b1',
+          client_reported_at: new Date(),
+        });
+
+        await service.handleCalendlyInviteeCreated(invitee);
+        expect(bookings.update.mock.calls[0][1]).not.toHaveProperty('status');
+      });
+
+      it('adopts by invitee URI when the browser captured one', async () => {
+        // The stronger match: same idempotency key, so this is unambiguously
+        // the same booking rather than an inference from the prospect.
+        bookings.findBySchedulerEventId.mockResolvedValue({
+          id: 'client-b1',
+          client_reported_at: new Date(),
+        });
+
+        await service.handleCalendlyInviteeCreated(invitee);
+
+        expect(bookings.create).not.toHaveBeenCalled();
+        expect(bookings.update).toHaveBeenCalledWith(
+          'client-b1',
+          expect.objectContaining({ client_reported_at: null }),
+        );
+      });
+    });
+
+    it('keeps the contact details the invitee typed into Calendly', async () => {
+      // These were mapped out of the payload and then discarded. Two things
+      // depended on them and neither worked: an unlinked booking had NO contact
+      // detail at all, despite the handler logging that such a row is
+      // "recoverable by matching email addresses"; and a prospect who books
+      // under a different address could not be spotted.
+      await service.handleCalendlyInviteeCreated({
+        ...invitee,
+        email: 'mina.work@example.com',
+        name: 'Mina Chen',
+      });
+
+      expect(bookings.create.mock.calls[0][0]).toMatchObject({
+        invitee_email: 'mina.work@example.com',
+        invitee_name: 'Mina Chen',
+      });
+    });
+
+    it('records contact details even when the booking cannot be linked', async () => {
+      // The case they matter most in. With no prospect id this row is
+      // orphaned, and the email is the only thing anyone can reconcile it by.
+      await service.handleCalendlyInviteeCreated({
+        ...invitee,
+        prospectId: undefined,
+        email: 'orphan@example.com',
+      });
+
+      expect(bookings.create.mock.calls[0][0]).toMatchObject({
+        prospect_id: null,
+        invitee_email: 'orphan@example.com',
+      });
+    });
 
     it('creates the booking as PENDING, not confirmed', async () => {
       // Pending means unpaid, and that is the agent's follow-up queue.
@@ -287,6 +460,68 @@ describe('WebhooksService', () => {
       paid_at: new Date(),
     };
 
+    /**
+     * The failure this hardening exists to prevent.
+     *
+     * Marking a payment paid and confirming its booking are separate writes
+     * with no transaction around them, so a restart can land between the two.
+     * The money is taken, the booking is still pending, and the customer is
+     * owed a consultation nothing in the system knows about.
+     *
+     * Stripe retries for days precisely so that this is recoverable — but only
+     * if the retry actually re-runs the work. It used to be discarded twice
+     * over: the webhook claim refused an event it had already seen, and
+     * markPaidFromSession returned null for a payment already marked paid.
+     */
+    describe('after a crash midway through', () => {
+      it('confirms a booking left pending by an interrupted attempt', async () => {
+        // The payment was marked paid before the crash; the booking was not.
+        payments.markPaidFromSession.mockResolvedValue(paidPayment);
+        bookings.findById.mockResolvedValue({
+          id: 'booking-1',
+          status: 'pending',
+        });
+
+        await service.handleStripeCheckoutCompleted(session);
+
+        expect(bookings.update).toHaveBeenCalledWith(
+          'booking-1',
+          expect.objectContaining({ status: 'confirmed' }),
+        );
+      });
+
+      it('finishes the remaining steps when the booking was already done', async () => {
+        // Crash landed one step later: booking confirmed, prospect never
+        // advanced. Stopping here because the booking looks fine would leave
+        // the prospect stuck at pre_screened forever.
+        payments.markPaidFromSession.mockResolvedValue(paidPayment);
+        bookings.findById.mockResolvedValue({
+          id: 'booking-1',
+          status: 'confirmed',
+        });
+
+        await service.handleStripeCheckoutCompleted(session);
+
+        expect(prospects.advanceStage).toHaveBeenCalledWith(
+          'prospect-1',
+          'booked',
+        );
+        expect(notifier.notifyBookingConfirmed).toHaveBeenCalled();
+      });
+
+      it('does not re-confirm a booking that is already confirmed', async () => {
+        // Idempotent, but not wastefully so: no pointless write.
+        payments.markPaidFromSession.mockResolvedValue(paidPayment);
+        bookings.findById.mockResolvedValue({
+          id: 'booking-1',
+          status: 'confirmed',
+        });
+
+        await service.handleStripeCheckoutCompleted(session);
+        expect(bookings.update).not.toHaveBeenCalled();
+      });
+    });
+
     it('confirms the booking and advances the prospect', async () => {
       payments.markPaidFromSession.mockResolvedValue(paidPayment);
 
@@ -301,9 +536,11 @@ describe('WebhooksService', () => {
       );
     });
 
-    it('does nothing at all for an already-processed payment', async () => {
-      // markPaidFromSession returns null for a duplicate. No side effects may
-      // follow — this is the replay guard for the money path.
+    it('does nothing when there is genuinely nothing to act on', async () => {
+      // null now means only one thing: no local payment row AND no prospect in
+      // the session metadata, so there is no record to attach anything to.
+      // An already-paid payment does NOT return null — see the crash tests
+      // below for why that distinction is the whole point.
       payments.markPaidFromSession.mockResolvedValue(null);
 
       await service.handleStripeCheckoutCompleted(session);
@@ -367,6 +604,59 @@ describe('WebhooksService', () => {
   });
 
   // =========================================================================
+
+  /**
+   * A checkout session that ended without money.
+   *
+   * Both routes here were previously unhandled, which meant a delayed payment
+   * method that failed to settle left its payment row open indefinitely — and
+   * the reconciliation sweep then spent a Stripe round trip re-asking a
+   * question Stripe had already answered.
+   */
+  describe('a session that ended unpaid', () => {
+    it('closes the payment row off', async () => {
+      payments.markSessionUnpaid.mockResolvedValue({
+        id: 'payment-1',
+        prospect_id: 'prospect-1',
+      });
+
+      await service.handleStripeSessionUnpaid('cs_test_1', 'expired');
+
+      expect(payments.markSessionUnpaid).toHaveBeenCalledWith(
+        'cs_test_1',
+        'expired',
+      );
+    });
+
+    it('leaves the BOOKING alone', async () => {
+      // The slot is still held and this person still belongs in the follow-up
+      // queue. Cancelling their booking over a failed card takes the time away
+      // from someone who may simply try a different one.
+      payments.markSessionUnpaid.mockResolvedValue({
+        id: 'payment-1',
+        prospect_id: 'prospect-1',
+      });
+
+      await service.handleStripeSessionUnpaid('cs_test_1', 'failed');
+
+      expect(bookings.update).not.toHaveBeenCalled();
+      expect(prospects.advanceStage).not.toHaveBeenCalled();
+    });
+
+    it('says so when there is no payment row to close', async () => {
+      // Means a session was created outside this service. Not fatal, but not
+      // something to swallow either.
+      const warn = jest
+        .spyOn(service['logger'], 'warn')
+        .mockImplementation(() => {});
+      payments.markSessionUnpaid.mockResolvedValue(null);
+
+      await service.handleStripeSessionUnpaid('cs_unknown', 'expired');
+
+      expect(warn).toHaveBeenCalled();
+      expect(summaries.refresh).not.toHaveBeenCalled();
+    });
+  });
 
   describe('processOnce', () => {
     it('runs the handler and marks the event processed', async () => {

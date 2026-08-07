@@ -59,9 +59,7 @@ export class PointsAggregatorService {
     const labelPoints = (category: PointsCategory, label: string): number => {
       const rule = rules.find(
         (r: PointsRule) =>
-          r.category === category &&
-          r.is_active &&
-          r.attribute_label === label,
+          r.category === category && r.is_active && r.attribute_label === label,
       );
       return rule ? rule.points_value : 0;
     };

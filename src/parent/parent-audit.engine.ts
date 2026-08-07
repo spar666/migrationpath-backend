@@ -62,7 +62,10 @@ export class ParentAuditEngine {
       ? 'LEGALLY_ELIGIBLE'
       : 'LEGALLY_INELIGIBLE';
 
-    const predictedVisa = this.resolveVisaPath(profile.parentAge, agePensionAge);
+    const predictedVisa = this.resolveVisaPath(
+      profile.parentAge,
+      agePensionAge,
+    );
 
     if (isEligible) {
       recommendations.push(
@@ -137,7 +140,10 @@ export class ParentAuditEngine {
   ): BalanceOfFamilyResult {
     const total = Math.max(0, profile.totalChildren);
     const inAus = Math.min(Math.max(0, profile.childrenInAustralia), total);
-    const largestOther = Math.max(0, profile.childrenInLargestOtherCountry ?? 0);
+    const largestOther = Math.max(
+      0,
+      profile.childrenInLargestOtherCountry ?? 0,
+    );
 
     const ratio = total > 0 ? inAus / total : 0;
     const percentage = Math.round(ratio * 100);
@@ -167,10 +173,7 @@ export class ParentAuditEngine {
     return result.pass || result.alternativeLimbPass;
   }
 
-  private evaluateAos(
-    profile: ParentProfileDto,
-    benchmark: number,
-  ): AosResult {
+  private evaluateAos(profile: ParentProfileDto, benchmark: number): AosResult {
     const meetsBenchmark = profile.sponsorTaxableIncome >= benchmark;
     return {
       sponsorTaxableIncome: profile.sponsorTaxableIncome,

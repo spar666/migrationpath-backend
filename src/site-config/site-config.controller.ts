@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Put,
-  Body,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -43,10 +37,7 @@ export class SiteConfigController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Update the full site configuration' })
-  updateConfig(
-    @Body() dto: UpdateSiteConfigDto,
-    @User() user: AuthUser,
-  ) {
+  updateConfig(@Body() dto: UpdateSiteConfigDto, @User() user: AuthUser) {
     return this.siteConfigService.updateConfig(dto, user.id);
   }
 }

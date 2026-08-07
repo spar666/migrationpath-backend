@@ -54,7 +54,9 @@ export class LeadsService {
     // a misconfigured mail server or a Slack outage should not make lead
     // capture itself fail.
     this.leadNotifier.notifyNewLead(lead).catch((error) => {
-      this.logger.error(`Unexpected error notifying about new lead: ${error.message}`);
+      this.logger.error(
+        `Unexpected error notifying about new lead: ${error.message}`,
+      );
     });
 
     return lead;

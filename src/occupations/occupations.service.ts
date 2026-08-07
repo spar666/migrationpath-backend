@@ -232,7 +232,8 @@ export class OccupationsService {
     if (dto.pointsValue !== undefined) existing.points_value = dto.pointsValue;
 
     const listChanged =
-      dto.primaryList !== undefined && dto.primaryList !== existing.primary_list;
+      dto.primaryList !== undefined &&
+      dto.primaryList !== existing.primary_list;
     if (dto.primaryList !== undefined) existing.primary_list = dto.primaryList;
 
     await this.occupationRepository.save(existing);
@@ -279,9 +280,7 @@ export class OccupationsService {
     anzscoCodes?: string[],
   ): Promise<Record<string, string>> {
     const occupations = await this.occupationRepository.find({
-      where: anzscoCodes?.length
-        ? { anzsco_code: In(anzscoCodes) }
-        : {},
+      where: anzscoCodes?.length ? { anzsco_code: In(anzscoCodes) } : {},
       select: ['anzsco_code', 'occupation_name'],
     });
 
@@ -289,6 +288,30 @@ export class OccupationsService {
       map[occ.anzsco_code] = occ.occupation_name;
       return map;
     }, {});
+  }
+
+  /**
+   * Is this occupation on one of the named skilled lists?
+   *
+   * Returns null for "cannot say" — no code given, or the code is not in the
+   * catalogue, or it is in the catalogue but unclassified. That is deliberately
+   * distinct from false: the employer-sponsored engine turns null into an open
+   * question for the agent and false into a disqualification, and an occupation
+   * we simply have no row for must not disqualify anyone.
+   */
+  async isOnAnyList(
+    anzscoCode: string | undefined,
+    lists: string[],
+  ): Promise<boolean | null> {
+    if (!anzscoCode || !lists.length) return null;
+
+    const occupation = await this.occupationRepository.findOne({
+      where: { anzsco_code: anzscoCode },
+      select: ['anzsco_code', 'primary_list'],
+    });
+
+    if (!occupation?.primary_list) return null;
+    return lists.includes(occupation.primary_list);
   }
 
   /**
@@ -335,9 +358,7 @@ export class OccupationsService {
         result.linksDeactivated += perOccupation.deactivated;
       }
 
-      this.logger.log(
-        `sync-visas complete: ${JSON.stringify(result)}`,
-      );
+      this.logger.log(`sync-visas complete: ${JSON.stringify(result)}`);
       return result;
     });
   }

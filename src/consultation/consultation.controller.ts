@@ -46,14 +46,18 @@ export class ConsultationController {
 
   @Get('questionnaire/user/:userId')
   @Roles('admin')
-  @ApiOperation({ summary: 'Get questionnaire for a specific user (admin only)' })
+  @ApiOperation({
+    summary: 'Get questionnaire for a specific user (admin only)',
+  })
   findUserQuestionnaire(@Param('userId') userId: string) {
     return this.consultationService.findMyQuestionnaire(userId);
   }
 
   @Get('questionnaire')
   @Roles('admin')
-  @ApiOperation({ summary: 'List all consultation questionnaires (admin only)' })
+  @ApiOperation({
+    summary: 'List all consultation questionnaires (admin only)',
+  })
   findAllQuestionnaires(@Query() query: PaginationQueryDto) {
     return this.consultationService.findAllQuestionnaires(
       query.page ?? 1,

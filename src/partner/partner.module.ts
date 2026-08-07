@@ -8,12 +8,16 @@ import { PartnerEligibilityEngine } from './partner-eligibility.engine';
 import { PartnerEligibilityService } from './partner-eligibility.service';
 import { PolicyConfigModule } from '../policy-config/policy-config.module';
 import { LeadsModule } from '../leads/leads.module';
+import { ProspectModule } from '../prospect/prospect.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([PartnerAudit, PartnerEligibilitySubmission]),
     PolicyConfigModule,
     LeadsModule,
+    // The partner quiz writes onto the funnel spine (prospect -> booking ->
+    // payment). One-way, same as pre-screen: prospect never imports partner.
+    ProspectModule,
   ],
   controllers: [PartnerController],
   providers: [

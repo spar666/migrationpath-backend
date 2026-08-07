@@ -83,31 +83,46 @@ export class FooterConfigDto {
 }
 
 export class UpdateSiteConfigDto {
-  @ApiProperty({ description: 'Home page configuration', type: HomePageConfigDto })
+  @ApiProperty({
+    description: 'Home page configuration',
+    type: HomePageConfigDto,
+  })
   @ValidateNested()
   @Type(() => HomePageConfigDto)
   @IsNotEmptyObject()
   home: HomePageConfigDto;
 
-  @ApiProperty({ description: 'Student page configuration', type: PageConfigDto })
+  @ApiProperty({
+    description: 'Student page configuration',
+    type: PageConfigDto,
+  })
   @ValidateNested()
   @Type(() => PageConfigDto)
   @IsNotEmptyObject()
   student: PageConfigDto;
 
-  @ApiProperty({ description: 'Skilled page configuration', type: PageConfigDto })
+  @ApiProperty({
+    description: 'Skilled page configuration',
+    type: PageConfigDto,
+  })
   @ValidateNested()
   @Type(() => PageConfigDto)
   @IsNotEmptyObject()
   skilled: PageConfigDto;
 
-  @ApiProperty({ description: 'Partner page configuration', type: PageConfigDto })
+  @ApiProperty({
+    description: 'Partner page configuration',
+    type: PageConfigDto,
+  })
   @ValidateNested()
   @Type(() => PageConfigDto)
   @IsNotEmptyObject()
   partner: PageConfigDto;
 
-  @ApiProperty({ description: 'Onshore page configuration', type: PageConfigDto })
+  @ApiProperty({
+    description: 'Onshore page configuration',
+    type: PageConfigDto,
+  })
   @ValidateNested()
   @Type(() => PageConfigDto)
   @IsNotEmptyObject()

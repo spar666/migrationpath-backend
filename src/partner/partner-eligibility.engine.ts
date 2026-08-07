@@ -137,7 +137,10 @@ export class PartnerEligibilityEngine {
       a.previousSponsorshipCount === '2 or more' ||
       a.stillWithPMVSponsor === 'Yes' ||
       a.marriedBeforePMVCeased === 'No' ||
-      onOrAfter(a.sponsorPartnerVisaApplicationDate, daysAgo(SPONSORSHIP_LIMITATION_DAYS)) ||
+      onOrAfter(
+        a.sponsorPartnerVisaApplicationDate,
+        daysAgo(SPONSORSHIP_LIMITATION_DAYS),
+      ) ||
       // Not living together, never have, and unwilling to marry or move in.
       (nonCommitted &&
         a.liveTogetherNow === 'No' &&
@@ -151,7 +154,9 @@ export class PartnerEligibilityEngine {
         (a.arrangedMarriage === 'No' || a.arrangedMarriage === 'Not sure')) ||
       // Previous PMV sponsor: none of the special circumstances apply.
       ((a.pmvPreviousSponsorCircumstances?.length ?? 0) > 0 &&
-        a.pmvPreviousSponsorCircumstances!.every((c) => c === 'None of the above apply'))
+        a.pmvPreviousSponsorCircumstances!.every(
+          (c) => c === 'None of the above apply',
+        ))
     );
   }
 
@@ -196,8 +201,11 @@ export class PartnerEligibilityEngine {
       (committedOrWilling && a.liveTogetherNow === 'No') ||
       // Never met in person.
       (a.metInPerson === NEVER_MET &&
-        (a.relationshipStatus === 'Married' || a.relationshipStatus === 'Engaged')) ||
-      (nonCommitted && a.metInPerson === NEVER_MET && a.arrangedMarriage === 'Yes')
+        (a.relationshipStatus === 'Married' ||
+          a.relationshipStatus === 'Engaged')) ||
+      (nonCommitted &&
+        a.metInPerson === NEVER_MET &&
+        a.arrangedMarriage === 'Yes')
     );
   }
 
@@ -214,7 +222,8 @@ export class PartnerEligibilityEngine {
       a.techComfort === 'Somewhat comfortable' ||
       a.additionalMigratingMembers === '1' ||
       a.additionalMigratingMembers === '2 or more' ||
-      a.interpreterNeed === "Maybe, we're not sure if our English is good enough" ||
+      a.interpreterNeed ===
+        "Maybe, we're not sure if our English is good enough" ||
       a.interpreterNeed === 'No, both of our English is good enough' ||
       a.planningNewVisaSoon === 'Yes' ||
       onOrBefore(a.visaExpiryDate, daysAhead(60));

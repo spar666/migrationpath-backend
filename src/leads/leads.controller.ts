@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { LeadsService } from './leads.service';
@@ -24,7 +33,9 @@ export class LeadsController {
   // on top of it: 5 submissions per 60 seconds per IP.
   @Post()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  @ApiOperation({ summary: 'Submit a public quote / contact lead (no auth required)' })
+  @ApiOperation({
+    summary: 'Submit a public quote / contact lead (no auth required)',
+  })
   create(@Body() dto: CreateLeadDto) {
     return this.leadsService.create(dto);
   }
@@ -42,7 +53,7 @@ export class LeadsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  @ApiOperation({ summary: 'Update a lead\'s status (admin only)' })
+  @ApiOperation({ summary: "Update a lead's status (admin only)" })
   updateStatus(@Param('id') id: string, @Body() dto: UpdateLeadStatusDto) {
     return this.leadsService.updateStatus(id, dto);
   }

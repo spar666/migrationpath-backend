@@ -7,10 +7,7 @@ import {
 } from 'typeorm';
 
 export type LeadSource =
-  | 'quote_slideover'
-  | 'quote_page'
-  | 'partner_eligibility'
-  | 'other';
+  'quote_slideover' | 'quote_page' | 'partner_eligibility' | 'other';
 export type LeadStatus = 'new' | 'contacted' | 'converted' | 'archived';
 
 @Entity('leads')

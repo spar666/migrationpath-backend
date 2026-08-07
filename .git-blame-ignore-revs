@@ -1,0 +1,8 @@
+# Revisions to skip in `git blame` — mechanical, zero behaviour change.
+#
+# Configure once per clone:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Add the commit SHA of the repo-wide `prettier --write "src/**/*.ts"` run
+# below once it is committed. Until then blame on reformatted lines points at
+# that commit rather than at whoever wrote the logic.

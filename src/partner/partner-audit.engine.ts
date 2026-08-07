@@ -52,26 +52,42 @@ export class PartnerAuditEngine {
 
     const financialScore = cap(
       (p.jointBankAccounts ? num(cfg, 'partner.jointBankAccounts', 30) : 0) +
-        (p.jointLeaseOrMortgage ? num(cfg, 'partner.jointLeaseOrMortgage', 40) : 0) +
+        (p.jointLeaseOrMortgage
+          ? num(cfg, 'partner.jointLeaseOrMortgage', 40)
+          : 0) +
         (p.sharedUtilityBills ? num(cfg, 'partner.sharedUtilityBills', 30) : 0),
     );
 
     const householdScore = cap(
-      (p.sharedDomesticBills ? num(cfg, 'partner.sharedDomesticBills', 40) : 0) +
-        (p.jointChildResponsibility ? num(cfg, 'partner.jointChildResponsibility', 30) : 0) +
-        (p.matchingAddressHistory ? num(cfg, 'partner.matchingAddressHistory', 30) : 0),
+      (p.sharedDomesticBills
+        ? num(cfg, 'partner.sharedDomesticBills', 40)
+        : 0) +
+        (p.jointChildResponsibility
+          ? num(cfg, 'partner.jointChildResponsibility', 30)
+          : 0) +
+        (p.matchingAddressHistory
+          ? num(cfg, 'partner.matchingAddressHistory', 30)
+          : 0),
     );
 
     const hasForm888 = p.form888Count >= form888Required;
     const socialScore = cap(
-      (p.sharedTravelItineraries ? num(cfg, 'partner.sharedTravelItineraries', 30) : 0) +
+      (p.sharedTravelItineraries
+        ? num(cfg, 'partner.sharedTravelItineraries', 30)
+        : 0) +
         (hasForm888 ? num(cfg, 'partner.form888Points', 40) : 0) +
-        (p.jointSocialInvitations ? num(cfg, 'partner.jointSocialInvitations', 30) : 0),
+        (p.jointSocialInvitations
+          ? num(cfg, 'partner.jointSocialInvitations', 30)
+          : 0),
     );
 
     const commitmentScore = cap(
-      (p.livedTogether12Months ? num(cfg, 'partner.livedTogether12Months', 50) : 0) +
-        (p.registeredRelationshipBDM ? num(cfg, 'partner.registeredRelationshipBDM', 50) : 0),
+      (p.livedTogether12Months
+        ? num(cfg, 'partner.livedTogether12Months', 50)
+        : 0) +
+        (p.registeredRelationshipBDM
+          ? num(cfg, 'partner.registeredRelationshipBDM', 50)
+          : 0),
     );
 
     const legislativeWaiverApplied =
@@ -81,10 +97,34 @@ export class PartnerAuditEngine {
       : 'STANDARD';
 
     const pillars: PillarResult[] = [
-      { key: 'financial', label: 'Financial Aspects', score: financialScore, percentage: financialScore, status: 'STANDARD' },
-      { key: 'household', label: 'Nature of Household', score: householdScore, percentage: householdScore, status: 'STANDARD' },
-      { key: 'social', label: 'Social Aspects', score: socialScore, percentage: socialScore, status: 'STANDARD' },
-      { key: 'commitment', label: 'Commitment Aspects', score: commitmentScore, percentage: commitmentScore, status: commitmentStatus },
+      {
+        key: 'financial',
+        label: 'Financial Aspects',
+        score: financialScore,
+        percentage: financialScore,
+        status: 'STANDARD',
+      },
+      {
+        key: 'household',
+        label: 'Nature of Household',
+        score: householdScore,
+        percentage: householdScore,
+        status: 'STANDARD',
+      },
+      {
+        key: 'social',
+        label: 'Social Aspects',
+        score: socialScore,
+        percentage: socialScore,
+        status: 'STANDARD',
+      },
+      {
+        key: 'commitment',
+        label: 'Commitment Aspects',
+        score: commitmentScore,
+        percentage: commitmentScore,
+        status: commitmentStatus,
+      },
     ];
 
     const overallReadiness = Math.round(
@@ -140,9 +180,17 @@ export class PartnerAuditEngine {
 
   private resolveVisaPath(location: ApplicantLocation): PredictedVisa {
     if (location === ApplicantLocation.ONSHORE) {
-      return { subclass: '820', name: 'Partner visa (Onshore, 820/801)', location: 'onshore' };
+      return {
+        subclass: '820',
+        name: 'Partner visa (Onshore, 820/801)',
+        location: 'onshore',
+      };
     }
-    return { subclass: '309', name: 'Partner visa (Offshore, 309/100)', location: 'offshore' };
+    return {
+      subclass: '309',
+      name: 'Partner visa (Offshore, 309/100)',
+      location: 'offshore',
+    };
   }
 
   private buildRecommendations(
@@ -172,35 +220,70 @@ export class PartnerAuditEngine {
     const recs: string[] = [];
 
     if (scores.financialScore < weakThreshold) {
-      if (!p.jointLeaseOrMortgage) recs.push('Financial: add both partners to a lease or mortgage — joint property commitments are the strongest financial evidence.');
-      if (!p.jointBankAccounts) recs.push('Financial: open a joint bank account and use it for shared expenses to demonstrate pooled finances.');
-      if (!p.sharedUtilityBills) recs.push('Financial: put utility accounts in both names, or retain bills showing shared liability.');
+      if (!p.jointLeaseOrMortgage)
+        recs.push(
+          'Financial: add both partners to a lease or mortgage — joint property commitments are the strongest financial evidence.',
+        );
+      if (!p.jointBankAccounts)
+        recs.push(
+          'Financial: open a joint bank account and use it for shared expenses to demonstrate pooled finances.',
+        );
+      if (!p.sharedUtilityBills)
+        recs.push(
+          'Financial: put utility accounts in both names, or retain bills showing shared liability.',
+        );
     }
 
     if (scores.householdScore < weakThreshold) {
-      if (!p.sharedDomesticBills) recs.push('Household: keep records of shared domestic bills and how household costs are divided between you.');
-      if (!p.matchingAddressHistory) recs.push('Household: build a consistent shared address history (licences, mail, electoral roll) at the same residence.');
-      if (!p.jointChildResponsibility) recs.push('Household: if you share care of children, document joint responsibility (school records, medical, guardianship).');
+      if (!p.sharedDomesticBills)
+        recs.push(
+          'Household: keep records of shared domestic bills and how household costs are divided between you.',
+        );
+      if (!p.matchingAddressHistory)
+        recs.push(
+          'Household: build a consistent shared address history (licences, mail, electoral roll) at the same residence.',
+        );
+      if (!p.jointChildResponsibility)
+        recs.push(
+          'Household: if you share care of children, document joint responsibility (school records, medical, guardianship).',
+        );
     }
 
     if (scores.socialScore < weakThreshold) {
-      if (p.form888Count < form888Required) recs.push(`Social: obtain at least ${form888Required} Form 888 statutory declarations from Australian citizens or permanent residents (you currently have ${p.form888Count}).`);
-      if (!p.sharedTravelItineraries) recs.push('Social: keep joint travel itineraries and booking records showing you travel together.');
-      if (!p.jointSocialInvitations) recs.push('Social: retain invitations and evidence addressed to you as a couple to show you are recognised socially.');
+      if (p.form888Count < form888Required)
+        recs.push(
+          `Social: obtain at least ${form888Required} Form 888 statutory declarations from Australian citizens or permanent residents (you currently have ${p.form888Count}).`,
+        );
+      if (!p.sharedTravelItineraries)
+        recs.push(
+          'Social: keep joint travel itineraries and booking records showing you travel together.',
+        );
+      if (!p.jointSocialInvitations)
+        recs.push(
+          'Social: retain invitations and evidence addressed to you as a couple to show you are recognised socially.',
+        );
     }
 
     if (legislativeWaiverApplied) {
-      recs.push('Commitment: your BDM-registered relationship satisfies the 12-month cohabitation requirement — the low-cohabitation risk is waived. Keep the registration certificate accessible.');
+      recs.push(
+        'Commitment: your BDM-registered relationship satisfies the 12-month cohabitation requirement — the low-cohabitation risk is waived. Keep the registration certificate accessible.',
+      );
     } else if (scores.commitmentScore < weakThreshold) {
       if (!p.livedTogether12Months && !p.registeredRelationshipBDM) {
-        recs.push('Commitment: you have neither 12+ months of cohabitation nor a registered relationship. Register your de facto relationship with a State/Territory BDM to legally satisfy the cohabitation requirement.');
+        recs.push(
+          'Commitment: you have neither 12+ months of cohabitation nor a registered relationship. Register your de facto relationship with a State/Territory BDM to legally satisfy the cohabitation requirement.',
+        );
       } else if (!p.livedTogether12Months) {
-        recs.push('Commitment: strengthen the commitment pillar with evidence of shared living arrangements approaching 12 months.');
+        recs.push(
+          'Commitment: strengthen the commitment pillar with evidence of shared living arrangements approaching 12 months.',
+        );
       }
     }
 
     if (recs.length === 0) {
-      recs.push('Your evidence is strong across all four pillars. Focus on organising and certifying documents ahead of lodgement.');
+      recs.push(
+        'Your evidence is strong across all four pillars. Focus on organising and certifying documents ahead of lodgement.',
+      );
     }
 
     return recs;

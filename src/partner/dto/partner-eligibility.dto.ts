@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsIn,
   IsISO8601,
@@ -58,18 +59,24 @@ export class PartnerEligibilityDto {
   @MaxLength(100)
   applicantCountry: string;
 
-  @ApiPropertyOptional({ description: 'Australian state/territory (onshore only)' })
+  @ApiPropertyOptional({
+    description: 'Australian state/territory (onshore only)',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(100)
   applicantState?: string;
 
-  @ApiPropertyOptional({ description: "Has the applicant's Australian visa expired?" })
+  @ApiPropertyOptional({
+    description: "Has the applicant's Australian visa expired?",
+  })
   @IsOptional()
   @IsIn(['Yes', 'No'])
   visaExpired?: string;
 
-  @ApiPropertyOptional({ description: "Is the applicant's visa a substantive visa?" })
+  @ApiPropertyOptional({
+    description: "Is the applicant's visa a substantive visa?",
+  })
   @IsOptional()
   @IsIn(['Yes', 'No'])
   substantiveVisa?: string;
@@ -135,7 +142,9 @@ export class PartnerEligibilityDto {
   @IsIn(['Yes', 'No'])
   marriedBeforePMVCeased?: string;
 
-  @ApiPropertyOptional({ description: 'Legal status in country of residence (offshore only)' })
+  @ApiPropertyOptional({
+    description: 'Legal status in country of residence (offshore only)',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(100)
@@ -153,7 +162,9 @@ export class PartnerEligibilityDto {
   @MaxLength(100)
   sponsorResidencyStatus: string;
 
-  @ApiPropertyOptional({ description: 'How the sponsor obtained permanent residency' })
+  @ApiPropertyOptional({
+    description: 'How the sponsor obtained permanent residency',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(100)
@@ -381,4 +392,22 @@ export class PartnerEligibilityDto {
   @IsEmail()
   @MaxLength(255)
   email: string;
+
+  // ---- Consent ----
+  // Required, not optional-with-a-default: a submission that does not carry
+  // consent is rejected rather than stored, because the prospect record this
+  // creates holds personal information we were not given permission to keep.
+  @ApiProperty({ description: 'The visitor ticked the collection notice' })
+  @IsBoolean()
+  consent_given: boolean;
+
+  /**
+   * The collection notice as it was worded on screen, stored verbatim. If the
+   * wording changes later, old records still show what that person agreed to.
+   */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  consent_text?: string;
 }

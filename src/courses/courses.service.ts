@@ -89,7 +89,8 @@ export class CoursesService {
       courseTitle: dto.courseTitle,
       anzscoCode: dto.anzscoCode,
       // Occupation title is denormalised from the master, never entered by hand.
-      anzscoTitle: (await this.resolveOccupationTitle(dto.anzscoCode)) ?? undefined,
+      anzscoTitle:
+        (await this.resolveOccupationTitle(dto.anzscoCode)) ?? undefined,
       isActive: dto.isActive ?? true,
     });
 

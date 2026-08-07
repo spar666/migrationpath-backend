@@ -187,7 +187,9 @@ export class ProspectNotifierService {
       `Client fit: ${yesNo(prospect.client_fit)}`,
     );
     if (context.recommendedSubclass) {
-      lines.push(`Recommended pathway: subclass ${context.recommendedSubclass}`);
+      lines.push(
+        `Recommended pathway: subclass ${context.recommendedSubclass}`,
+      );
     }
     if (context.blockers?.length) {
       lines.push('', 'Blockers:', ...context.blockers.map((b) => `  - ${b}`));
@@ -201,7 +203,12 @@ export class ProspectNotifierService {
     }
 
     const url = this.prepUrl(prospect);
-    lines.push('', url ? `Prep view: ${url}` : 'Open the prospect in the admin panel to prepare.');
+    lines.push(
+      '',
+      url
+        ? `Prep view: ${url}`
+        : 'Open the prospect in the admin panel to prepare.',
+    );
     return lines.join('\n');
   }
 

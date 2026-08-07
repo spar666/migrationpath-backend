@@ -3,7 +3,10 @@ import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { SkilledList } from '../constants/visa-mapping';
 
 export class CreateOccupationDto {
-  @ApiProperty({ description: '6-digit ANZSCO code (primary key)', example: '261313' })
+  @ApiProperty({
+    description: '6-digit ANZSCO code (primary key)',
+    example: '261313',
+  })
   @IsString()
   anzscoCode: string;
 

@@ -78,7 +78,11 @@ export class Occupation {
 
 @Entity('occupation_thresholds')
 export class OccupationThreshold {
-  @PrimaryColumn({ name: 'id', type: 'uuid', default: () => 'gen_random_uuid()' })
+  @PrimaryColumn({
+    name: 'id',
+    type: 'uuid',
+    default: () => 'gen_random_uuid()',
+  })
   id: string;
 
   @Column({ name: 'occupation_id', type: 'uuid' })

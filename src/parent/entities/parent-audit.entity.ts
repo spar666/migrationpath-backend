@@ -24,7 +24,11 @@ export class ParentAudit {
   @Column({ name: 'children_in_australia', type: 'int' })
   childrenInAustralia: number;
 
-  @Column({ name: 'children_in_largest_other_country', type: 'int', default: 0 })
+  @Column({
+    name: 'children_in_largest_other_country',
+    type: 'int',
+    default: 0,
+  })
   childrenInLargestOtherCountry: number;
 
   @Column({ name: 'sponsor_taxable_income', type: 'int' })

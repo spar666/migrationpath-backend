@@ -33,11 +33,7 @@ export class ConsultationQuestionnaire {
 }
 
 export type ConsultationBookingStatus =
-  | 'pending'
-  | 'confirmed'
-  | 'completed'
-  | 'cancelled'
-  | 'no_show';
+  'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
 
 /**
  * A consultation slot.
@@ -95,6 +91,27 @@ export class ConsultationBooking {
   @Column({ type: 'varchar', nullable: true })
   scheduler_invitee_id?: string | null;
 
+  /**
+   * The email the person actually entered in Calendly.
+   *
+   * Stored because it is the only contact detail an UNLINKED booking has. When
+   * an invitee arrives without a prospect id the handler logs that it is
+   * "recoverable only by hand, by matching email addresses" — which was not
+   * true while this column did not exist. There was nothing to match on.
+   *
+   * It is also deliberately kept SEPARATE from the prospect's email rather than
+   * assumed equal. People book with a work address having enquired with a
+   * personal one, and a mismatch is the main reason a booking cannot be tied to
+   * an enquiry by hand. Storing both makes that visible instead of invisible.
+   */
+  @Index()
+  @Column({ type: 'varchar', nullable: true })
+  invitee_email?: string | null;
+
+  /** The name entered in Calendly, for the same reason as the email. */
+  @Column({ type: 'varchar', nullable: true })
+  invitee_name?: string | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   scheduled_at?: Date | null;
 
@@ -113,6 +130,29 @@ export class ConsultationBooking {
 
   @Column({ type: 'text', nullable: true })
   cancellation_reason?: string | null;
+
+  /**
+   * Set when the visitor's own BROWSER told us about this booking, rather than
+   * Calendly's webhook.
+   *
+   * The webhook is a server-to-server call and can be late, misconfigured, or
+   * — in local development, where there is no public URL to deliver to —
+   * impossible. Without a booking row, checkout has nothing to attach a payment
+   * to and rejects the request, so a webhook problem presents as a broken
+   * checkout for a slot the visitor definitely booked.
+   *
+   * So the embed reports the booking as soon as Calendly confirms it. What that
+   * buys is a row to pay against; what it does NOT buy is trust. A browser
+   * report is unverified, so these rows carry only what is needed to take a
+   * payment, and the webhook overwrites the details when it arrives — see
+   * handleCalendlyInviteeCreated, which adopts rather than duplicates.
+   *
+   * The flag is what makes that adoption possible, and it is worth keeping
+   * afterwards: a booking whose details were never confirmed by Calendly is
+   * one an agent should sanity-check before the call.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  client_reported_at?: Date | null;
 
   @Column({ type: 'text', nullable: true })
   strategy_delivery: string;

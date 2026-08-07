@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateRegionalPostcodeBands1796000000000
-  implements MigrationInterface
-{
+export class CreateRegionalPostcodeBands1796000000000 implements MigrationInterface {
   name = 'CreateRegionalPostcodeBands1796000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -69,8 +67,6 @@ export class CreateRegionalPostcodeBands1796000000000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DROP TABLE IF EXISTS "regional_postcode_bands";`,
-    );
+    await queryRunner.query(`DROP TABLE IF EXISTS "regional_postcode_bands";`);
   }
 }

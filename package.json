@@ -18,6 +18,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "stripe:doctor": "ts-node -T scripts/stripe-doctor.ts",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/database/data-source.ts",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
@@ -25,7 +26,6 @@
     "vercel-build": "npm run build && npx typeorm migration:run -d dist/database/data-source.js"
   },
   "dependencies": {
-    "@hapi/joi": "^17.1.1",
     "@nestjs/cache-manager": "^3.1.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.3",
@@ -47,6 +47,7 @@
     "dotenv": "^16.4.7",
     "express": "^5.0.1",
     "helmet": "^8.1.0",
+    "joi": "^18.2.3",
     "keyv": "^5.2.3",
     "nodemailer": "^6.9.16",
     "passport": "^0.7.0",

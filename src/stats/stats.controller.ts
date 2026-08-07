@@ -8,7 +8,9 @@ export class StatsController {
   constructor(private readonly statsService: StatsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get platform stats (courses, occupations, universities counts)' })
+  @ApiOperation({
+    summary: 'Get platform stats (courses, occupations, universities counts)',
+  })
   getStats() {
     return this.statsService.getStats();
   }

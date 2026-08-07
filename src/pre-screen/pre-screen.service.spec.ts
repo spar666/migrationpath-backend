@@ -6,6 +6,7 @@ import { ProspectService } from '../prospect/prospect.service';
 import { ProspectSummaryService } from '../prospect/prospect-summary.service';
 import { SponsorRepository } from '../employer-sponsored/sponsor.repository';
 import { NominationRepository } from '../employer-sponsored/nomination.repository';
+import { OccupationsService } from '../occupations/occupations.service';
 
 /**
  * The native questionnaire runtime.
@@ -39,14 +40,19 @@ function engineResult(overrides: Record<string, unknown> = {}) {
 
 describe('PreScreenService.submit', () => {
   let service: PreScreenService;
-  let engine: { assess: jest.Mock };
+  let engine: { assess: jest.Mock; setOccupationListCheck: jest.Mock };
+  let occupations: { isOnAnyList: jest.Mock };
   let prospects: { create: jest.Mock; linkSponsor: jest.Mock };
   let summaries: { refresh: jest.Mock };
   let sponsors: { create: jest.Mock; save: jest.Mock };
   let nominations: { create: jest.Mock; save: jest.Mock };
 
   beforeEach(async () => {
-    engine = { assess: jest.fn().mockResolvedValue(engineResult()) };
+    engine = {
+      assess: jest.fn().mockResolvedValue(engineResult()),
+      setOccupationListCheck: jest.fn(),
+    };
+    occupations = { isOnAnyList: jest.fn().mockResolvedValue(true) };
     prospects = {
       create: jest
         .fn()
@@ -69,6 +75,7 @@ describe('PreScreenService.submit', () => {
         { provide: EmployerSponsoredEngine, useValue: engine },
         { provide: ProspectService, useValue: prospects },
         { provide: ProspectSummaryService, useValue: summaries },
+        { provide: OccupationsService, useValue: occupations },
         { provide: SponsorRepository, useValue: sponsors },
         { provide: NominationRepository, useValue: nominations },
       ],

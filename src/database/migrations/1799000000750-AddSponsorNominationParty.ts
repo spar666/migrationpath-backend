@@ -17,9 +17,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Runs last of the three because it adds the FK from prospects.sponsor_id,
  * which needs the sponsors table to exist.
  */
-export class AddSponsorNominationParty1799000000750
-  implements MigrationInterface
-{
+export class AddSponsorNominationParty1799000000750 implements MigrationInterface {
   name = 'AddSponsorNominationParty1799000000750';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

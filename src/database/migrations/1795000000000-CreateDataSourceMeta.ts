@@ -27,8 +27,18 @@ export class CreateDataSourceMeta1795000000000 implements MigrationInterface {
     const seed: Array<[string, string, number, string]> = [
       ['invitation_rounds', 'Invitation Rounds', 30, '/admin/invitations'],
       ['policy_config', 'Legislative Settings', 90, '/admin/policy-config'],
-      ['regional_postcodes', 'Regional Postcodes', 180, '/admin/regional-postcodes'],
-      ['occupation_lists', 'Occupation Lists (MLTSSL/STSOL/ROL/CSOL)', 365, '/admin/occupation-lists'],
+      [
+        'regional_postcodes',
+        'Regional Postcodes',
+        180,
+        '/admin/regional-postcodes',
+      ],
+      [
+        'occupation_lists',
+        'Occupation Lists (MLTSSL/STSOL/ROL/CSOL)',
+        365,
+        '/admin/occupation-lists',
+      ],
     ];
     for (const [domain, label, interval, route] of seed) {
       await queryRunner.query(

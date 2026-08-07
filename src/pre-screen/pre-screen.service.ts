@@ -1,7 +1,13 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { SubmitPreScreenDto } from './dto/submit-pre-screen.dto';
 import { ProspectService } from '../prospect/prospect.service';
 import { ProspectSummaryService } from '../prospect/prospect-summary.service';
+import { OccupationsService } from '../occupations/occupations.service';
 import { SponsorRepository } from '../employer-sponsored/sponsor.repository';
 import { NominationRepository } from '../employer-sponsored/nomination.repository';
 import {
@@ -45,16 +51,31 @@ export interface PreScreenResult {
  * they are evidence about which pathway the funnel attracts.
  */
 @Injectable()
-export class PreScreenService {
+export class PreScreenService implements OnModuleInit {
   private readonly logger = new Logger(PreScreenService.name);
 
   constructor(
     private readonly engine: EmployerSponsoredEngine,
     private readonly prospectService: ProspectService,
     private readonly summaryService: ProspectSummaryService,
+    private readonly occupationsService: OccupationsService,
     private readonly sponsorRepository: SponsorRepository,
     private readonly nominationRepository: NominationRepository,
   ) {}
+
+  /**
+   * Point the engine at the real occupations catalogue.
+   *
+   * Without this the engine falls back to whatever the prospect ticked on the
+   * form, which is not evidence — and since the questionnaire deliberately
+   * stopped asking, that fallback resolves to "unknown" for every submission
+   * and no business could ever come back eligible.
+   */
+  onModuleInit(): void {
+    this.engine.setOccupationListCheck((code, lists) =>
+      this.occupationsService.isOnAnyList(code, lists),
+    );
+  }
 
   async submit(dto: SubmitPreScreenDto): Promise<PreScreenResult> {
     if (!dto.contact?.consent_given) {
@@ -144,9 +165,7 @@ export class PreScreenService {
       return {
         applicantFacts: dto.business.candidate as ApplicantFacts | undefined,
         sponsorFacts: dto.business.sponsor as SponsorFacts | undefined,
-        nominationFacts: dto.business.nomination as
-          | NominationFacts
-          | undefined,
+        nominationFacts: dto.business.nomination as NominationFacts | undefined,
       };
     }
 
@@ -183,6 +202,18 @@ export class PreScreenService {
       years_trading: sponsorFacts.years_trading,
       state: sponsorFacts.state,
       postcode: sponsorFacts.postcode,
+      business_address: sponsorFacts.business_address,
+      sponsored_last_5_years: sponsorFacts.sponsored_last_5_years ?? null,
+      is_standard_business_sponsor:
+        sponsorFacts.is_standard_business_sponsor ?? null,
+      annual_revenue_band: sponsorFacts.annual_revenue_band,
+      years_operating_band: sponsorFacts.years_operating_band,
+      operates_only_in_australia:
+        sponsorFacts.operates_only_in_australia ?? null,
+      employee_count_band: sponsorFacts.employee_count_band,
+      has_temporary_visa_employees:
+        sponsorFacts.has_temporary_visa_employees ?? null,
+      referral_source: sponsorFacts.referral_source,
       sponsorship_status: (sponsorFacts.sponsorship_status ??
         'unknown') as Sponsor['sponsorship_status'],
       has_adverse_information: sponsorFacts.has_adverse_information ?? null,
@@ -196,8 +227,11 @@ export class PreScreenService {
         sponsor_id: sponsor.id,
         occupation_code: nominationFacts.occupation_code,
         occupation_name: nominationFacts.occupation_name,
+        position_title: nominationFacts.position_title,
         subclass: nominationFacts.subclass,
         annual_salary: nominationFacts.annual_salary,
+        salary_band: nominationFacts.salary_band,
+        candidate_current_pay_band: nominationFacts.candidate_current_pay_band,
         work_state: nominationFacts.work_state,
         work_postcode: nominationFacts.work_postcode,
         is_regional: nominationFacts.is_regional ?? null,

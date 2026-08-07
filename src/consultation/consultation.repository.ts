@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { BaseRepository, PaginatedResult } from '../common/repositories/base.repository';
+import { IsNull, Not, Repository } from 'typeorm';
+import {
+  BaseRepository,
+  PaginatedResult,
+} from '../common/repositories/base.repository';
 import {
   ConsultationQuestionnaire,
   ConsultationBooking,
@@ -92,6 +95,34 @@ export class ConsultationBookingRepository extends BaseRepository<ConsultationBo
       where: { prospect_id: prospectId },
       order: { created_at: 'DESC' },
     });
+  }
+
+  /**
+   * The booking the prospect's own browser reported, waiting to be confirmed
+   * by the webhook.
+   *
+   * Used for adoption: when the invitee webhook finally lands it does not know
+   * our booking id, so it looks for the row the browser created for that
+   * prospect and fills in the authoritative detail rather than creating a
+   * second row for the same slot.
+   *
+   * Restricted to `pending` because a paid booking must never be re-pointed at
+   * a different Calendly invitee.
+   */
+  async findClientReportedForProspect(
+    prospectId: string,
+  ): Promise<ConsultationBooking | null> {
+    const [latest] = await this.bookingRepository.find({
+      where: {
+        prospect_id: prospectId,
+        status: 'pending',
+        client_reported_at: Not(IsNull()),
+        scheduler_event_id: IsNull(),
+      },
+      order: { created_at: 'DESC' },
+      take: 1,
+    });
+    return latest ?? null;
   }
 
   /**

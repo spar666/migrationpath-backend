@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ProspectService } from './prospect.service';
 import { ProspectRepository } from './prospect.repository';
 import { ProspectSummaryService } from './prospect-summary.service';
@@ -192,5 +192,120 @@ describe('ProspectService.getPublicStatus', () => {
       await service.getPublicStatus(PROSPECT.id!, 'MP-7F3K9A');
       expect(bookings.findLatestForProspect).toHaveBeenCalledWith(PROSPECT.id);
     });
+  });
+});
+
+/**
+ * POST /prospects/:id/booking — the browser reporting its own booking.
+ *
+ * This exists because the invitee webhook cannot be relied on to have arrived
+ * at the moment checkout needs a booking to charge against: it is late under
+ * load, silent when misconfigured, and undeliverable in local development.
+ *
+ * What matters here is the ceiling on what an anonymous caller can achieve.
+ * The row it creates must be unpaid and must stay that way — if this could
+ * confirm a booking, two identifiers would be enough to get a free consult.
+ */
+describe('ProspectService.reportBooking', () => {
+  let service: ProspectService;
+  let prospects: { findOneById: jest.Mock };
+  let bookings: {
+    findLatestForProspect: jest.Mock;
+    create: jest.Mock;
+  };
+  let summary: { get: jest.Mock; refresh: jest.Mock };
+
+  beforeEach(async () => {
+    prospects = { findOneById: jest.fn().mockResolvedValue(PROSPECT) };
+    bookings = {
+      findLatestForProspect: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: 'b1', status: 'pending' }),
+    };
+    summary = { get: jest.fn(), refresh: jest.fn().mockResolvedValue(null) };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ProspectService,
+        { provide: ProspectRepository, useValue: prospects },
+        { provide: ProspectSummaryService, useValue: summary },
+        { provide: ConsultationBookingRepository, useValue: bookings },
+      ],
+    }).compile();
+
+    service = module.get<ProspectService>(ProspectService);
+  });
+
+  it('creates a booking so checkout has something to charge for', async () => {
+    await service.reportBooking(PROSPECT.id!, 'MP-7F3K9A', {
+      inviteeUri: 'https://api.calendly.com/scheduled_events/x/invitees/y',
+      startsAt: '2026-08-01T02:00:00.000Z',
+    });
+
+    expect(bookings.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prospect_id: PROSPECT.id,
+        status: 'pending',
+        client_reported_at: expect.any(Date),
+      }),
+    );
+  });
+
+  it('creates it UNPAID — an unverified report cannot buy a consult', async () => {
+    await service.reportBooking(PROSPECT.id!, 'MP-7F3K9A');
+
+    const created = bookings.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(created.status).toBe('pending');
+  });
+
+  it('marks the row so the webhook corrects it rather than duplicating it', async () => {
+    await service.reportBooking(PROSPECT.id!, 'MP-7F3K9A');
+
+    const created = bookings.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(created.client_reported_at).toBeInstanceOf(Date);
+  });
+
+  it('keeps the invitee URI so both paths recognise the same booking', async () => {
+    const uri = 'https://api.calendly.com/scheduled_events/x/invitees/y';
+    await service.reportBooking(PROSPECT.id!, 'MP-7F3K9A', { inviteeUri: uri });
+
+    const created = bookings.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(created.scheduler_event_id).toBe(uri);
+  });
+
+  it('records a booking even with nothing but the prospect', async () => {
+    // Calendly has moved this payload between embed versions. A row we can
+    // charge against beats a complete one — the webhook fills in the rest.
+    await service.reportBooking(PROSPECT.id!, 'MP-7F3K9A');
+
+    expect(bookings.create).toHaveBeenCalled();
+    const created = bookings.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(created.scheduler_event_id).toBeNull();
+  });
+
+  it('ignores an unparseable time rather than storing garbage', async () => {
+    await service.reportBooking(PROSPECT.id!, 'MP-7F3K9A', {
+      startsAt: 'whenever',
+    });
+
+    const created = bookings.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(created.scheduled_at).toBeNull();
+  });
+
+  it('does not create a second row when the webhook already won', async () => {
+    // Two rows for one slot leaves the agent guessing which the visitor holds.
+    bookings.findLatestForProspect.mockResolvedValue({
+      id: 'b1',
+      status: 'pending',
+    });
+
+    await service.reportBooking(PROSPECT.id!, 'MP-7F3K9A');
+    expect(bookings.create).not.toHaveBeenCalled();
+  });
+
+  it('is double-keyed like the other public endpoints', async () => {
+    await expect(
+      service.reportBooking(PROSPECT.id!, 'MP-WRONG'),
+    ).rejects.toThrow(NotFoundException);
+    expect(bookings.create).not.toHaveBeenCalled();
   });
 });

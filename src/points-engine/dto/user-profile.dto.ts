@@ -1,4 +1,12 @@
-import { IsInt, IsOptional, IsBoolean, IsEnum, IsString, Min, Max } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsBoolean,
+  IsEnum,
+  IsString,
+  Min,
+  Max,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   EnglishProficiency,
@@ -7,7 +15,10 @@ import {
 } from '../constants/points-catalogue';
 
 export class UserProfileDto {
-  @ApiPropertyOptional({ description: 'Visa group', default: DEFAULT_VISA_GROUP })
+  @ApiPropertyOptional({
+    description: 'Visa group',
+    default: DEFAULT_VISA_GROUP,
+  })
   @IsString()
   @IsOptional()
   visaGroup?: string = DEFAULT_VISA_GROUP;
@@ -18,27 +29,41 @@ export class UserProfileDto {
   @Max(120)
   age: number;
 
-  @ApiProperty({ description: 'English proficiency tier', enum: EnglishProficiency })
+  @ApiProperty({
+    description: 'English proficiency tier',
+    enum: EnglishProficiency,
+  })
   @IsEnum(EnglishProficiency)
   englishLevel: EnglishProficiency;
 
-  @ApiProperty({ description: 'Highest recognised qualification', enum: QualificationLevel })
+  @ApiProperty({
+    description: 'Highest recognised qualification',
+    enum: QualificationLevel,
+  })
   @IsEnum(QualificationLevel)
   qualification: QualificationLevel;
 
-  @ApiProperty({ description: 'Overseas skilled work experience (years, last 10)', example: 5 })
+  @ApiProperty({
+    description: 'Overseas skilled work experience (years, last 10)',
+    example: 5,
+  })
   @IsInt()
   @Min(0)
   @Max(50)
   overseasWorkYears: number;
 
-  @ApiProperty({ description: 'Australian skilled work experience (years, last 10)', example: 2 })
+  @ApiProperty({
+    description: 'Australian skilled work experience (years, last 10)',
+    example: 2,
+  })
   @IsInt()
   @Min(0)
   @Max(50)
   australianWorkYears: number;
 
-  @ApiPropertyOptional({ description: 'Completed study in a designated regional area' })
+  @ApiPropertyOptional({
+    description: 'Completed study in a designated regional area',
+  })
   @IsBoolean()
   @IsOptional()
   regionalStudy?: boolean;
@@ -62,12 +87,18 @@ export class StructuredPointsResultDto {
   })
   breakdown: Record<string, number>;
 
-  @ApiProperty({ description: 'Whether the 20-point combined work cap was applied' })
+  @ApiProperty({
+    description: 'Whether the 20-point combined work cap was applied',
+  })
   workCapApplied: boolean;
 
-  @ApiProperty({ description: 'Whether the total is below the 65-point pass mark' })
+  @ApiProperty({
+    description: 'Whether the total is below the 65-point pass mark',
+  })
   belowPassMark: boolean;
 
-  @ApiPropertyOptional({ description: 'Reason the applicant is ineligible, if any' })
+  @ApiPropertyOptional({
+    description: 'Reason the applicant is ineligible, if any',
+  })
   ineligibilityReason?: string;
 }

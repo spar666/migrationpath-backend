@@ -141,10 +141,7 @@ export class LeadNotifierService {
 
   private buildHtmlBody(lead: Lead): string {
     const escape = (value: string) =>
-      value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+      value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
     const rows: Array<[string, string | undefined]> = [
       ['Name', lead.full_name],
@@ -186,11 +183,18 @@ export class LeadNotifierService {
       { type: 'mrkdwn', text: `*Name*\n${lead.full_name}` },
       { type: 'mrkdwn', text: `*Email*\n${lead.email}` },
     ];
-    if (lead.phone) fields.push({ type: 'mrkdwn', text: `*Phone*\n${lead.phone}` });
+    if (lead.phone)
+      fields.push({ type: 'mrkdwn', text: `*Phone*\n${lead.phone}` });
     if (lead.visa_type) {
-      fields.push({ type: 'mrkdwn', text: `*Visa interest*\n${lead.visa_type}` });
+      fields.push({
+        type: 'mrkdwn',
+        text: `*Visa interest*\n${lead.visa_type}`,
+      });
     }
-    fields.push({ type: 'mrkdwn', text: `*Source*\n${this.sourceLabel(lead)}` });
+    fields.push({
+      type: 'mrkdwn',
+      text: `*Source*\n${this.sourceLabel(lead)}`,
+    });
 
     const blocks: Array<Record<string, unknown>> = [
       {

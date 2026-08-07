@@ -31,7 +31,8 @@ export class DataFreshnessService {
     status: FreshnessStatus;
     daysSinceVerified: number | null;
   } {
-    if (!row.lastVerifiedAt) return { status: 'stale', daysSinceVerified: null };
+    if (!row.lastVerifiedAt)
+      return { status: 'stale', daysSinceVerified: null };
     const days = Math.floor(
       (Date.now() - new Date(row.lastVerifiedAt).getTime()) / DAY_MS,
     );

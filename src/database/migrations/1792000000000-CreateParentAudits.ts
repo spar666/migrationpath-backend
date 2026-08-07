@@ -41,7 +41,9 @@ export class CreateParentAudits1792000000000 implements MigrationInterface {
     await queryRunner.query(
       `DROP INDEX IF EXISTS "idx_parent_audits_created_at";`,
     );
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_parent_audits_eligible";`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_parent_audits_eligible";`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "parent_audits";`);
   }
 }

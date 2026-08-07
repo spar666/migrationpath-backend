@@ -22,13 +22,20 @@ export class PartnerAuditResultDto {
   @ApiProperty({ description: 'Persisted audit id' })
   auditId: string;
 
-  @ApiProperty({ description: 'Overall application readiness percentage (0-100)' })
+  @ApiProperty({
+    description: 'Overall application readiness percentage (0-100)',
+  })
   overallReadiness: number;
 
-  @ApiProperty({ description: 'Per-pillar results (financial, household, social, commitment)' })
+  @ApiProperty({
+    description:
+      'Per-pillar results (financial, household, social, commitment)',
+  })
   pillars: PillarResult[];
 
-  @ApiProperty({ description: 'Predicted visa path based on physical location' })
+  @ApiProperty({
+    description: 'Predicted visa path based on physical location',
+  })
   predictedVisa: PredictedVisa;
 
   @ApiProperty({
@@ -37,9 +44,15 @@ export class PartnerAuditResultDto {
   })
   legislativeWaiverApplied: boolean;
 
-  @ApiProperty({ description: 'Commitment track status', enum: ['LEGALLY UNLOCKED', 'STANDARD'] })
+  @ApiProperty({
+    description: 'Commitment track status',
+    enum: ['LEGALLY UNLOCKED', 'STANDARD'],
+  })
   commitmentStatus: CommitmentStatus;
 
-  @ApiProperty({ description: 'Targeted, actionable legal recommendations', type: [String] })
+  @ApiProperty({
+    description: 'Targeted, actionable legal recommendations',
+    type: [String],
+  })
   recommendations: string[];
 }

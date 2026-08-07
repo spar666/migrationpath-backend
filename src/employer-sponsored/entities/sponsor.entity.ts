@@ -10,11 +10,7 @@ import {
 import { Nomination } from './nomination.entity';
 
 export type SponsorStatus =
-  | 'prospective'
-  | 'approved'
-  | 'lapsed'
-  | 'refused'
-  | 'unknown';
+  'prospective' | 'approved' | 'lapsed' | 'refused' | 'unknown';
 
 /**
  * The employer side of an employer-sponsored application.
@@ -60,6 +56,42 @@ export class Sponsor {
 
   @Column({ nullable: true })
   postcode?: string;
+
+  @Column({ nullable: true })
+  business_address?: string;
+
+  /** Prior sponsorship activity, which changes the monitoring history to check. */
+  @Column({ type: 'boolean', nullable: true })
+  sponsored_last_5_years?: boolean | null;
+
+  /**
+   * Holds an approved Standard Business Sponsorship, as declared. Only asked of
+   * a business that has sponsored before, so null means "not asked" rather than
+   * "no" — `sponsorship_status` carries the engine's reading of it.
+   */
+  @Column({ type: 'boolean', nullable: true })
+  is_standard_business_sponsor?: boolean | null;
+
+  /** Banded turnover. Stored as the chosen label, not parsed to a figure. */
+  @Column({ length: 40, nullable: true })
+  annual_revenue_band?: string;
+
+  /** Banded trading history. `years_trading` holds the derived lower bound. */
+  @Column({ length: 40, nullable: true })
+  years_operating_band?: string;
+
+  @Column({ type: 'boolean', nullable: true })
+  operates_only_in_australia?: boolean | null;
+
+  /** Banded headcount. `employee_count` holds the derived lower bound. */
+  @Column({ length: 40, nullable: true })
+  employee_count_band?: string;
+
+  @Column({ type: 'boolean', nullable: true })
+  has_temporary_visa_employees?: boolean | null;
+
+  @Column({ length: 60, nullable: true })
+  referral_source?: string;
 
   /** Existing Standard Business Sponsorship position, as declared. */
   @Column({ length: 24, default: 'unknown' })

@@ -28,13 +28,21 @@ export class PartnerAudit {
   @Column({ name: 'shared_domestic_bills', type: 'boolean', default: false })
   sharedDomesticBills: boolean;
 
-  @Column({ name: 'joint_child_responsibility', type: 'boolean', default: false })
+  @Column({
+    name: 'joint_child_responsibility',
+    type: 'boolean',
+    default: false,
+  })
   jointChildResponsibility: boolean;
 
   @Column({ name: 'matching_address_history', type: 'boolean', default: false })
   matchingAddressHistory: boolean;
 
-  @Column({ name: 'shared_travel_itineraries', type: 'boolean', default: false })
+  @Column({
+    name: 'shared_travel_itineraries',
+    type: 'boolean',
+    default: false,
+  })
   sharedTravelItineraries: boolean;
 
   @Column({ name: 'form_888_count', type: 'int', default: 0 })
@@ -46,7 +54,11 @@ export class PartnerAudit {
   @Column({ name: 'lived_together_12_months', type: 'boolean', default: false })
   livedTogether12Months: boolean;
 
-  @Column({ name: 'registered_relationship_bdm', type: 'boolean', default: false })
+  @Column({
+    name: 'registered_relationship_bdm',
+    type: 'boolean',
+    default: false,
+  })
   registeredRelationshipBDM: boolean;
 
   // ---- Computed outputs (logged for analytics / follow-up) ----
@@ -68,7 +80,11 @@ export class PartnerAudit {
   @Column({ name: 'commitment_status', type: 'varchar' })
   commitmentStatus: string;
 
-  @Column({ name: 'legislative_waiver_applied', type: 'boolean', default: false })
+  @Column({
+    name: 'legislative_waiver_applied',
+    type: 'boolean',
+    default: false,
+  })
   legislativeWaiverApplied: boolean;
 
   @Column({ name: 'predicted_subclass', type: 'varchar' })

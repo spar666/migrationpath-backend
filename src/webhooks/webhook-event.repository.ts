@@ -2,10 +2,18 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BaseRepository } from '../common/repositories/base.repository';
-import {
-  WebhookEvent,
-  WebhookProvider,
-} from './entities/webhook-event.entity';
+import { WebhookEvent, WebhookProvider } from './entities/webhook-event.entity';
+
+/**
+ * How long a claim is honoured before the delivery is considered abandoned.
+ *
+ * Sized against the two failure modes it sits between. Too short and a slow
+ * handler gets a second worker running alongside it; too long and a crashed
+ * handler is not retried until after the provider has given up. Five minutes
+ * comfortably exceeds any handler here (the longest does a handful of writes
+ * and one Slack call) and sits well inside Stripe's multi-day retry schedule.
+ */
+const LEASE_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class WebhookEventRepository extends BaseRepository<WebhookEvent> {
@@ -21,10 +29,27 @@ export class WebhookEventRepository extends BaseRepository<WebhookEvent> {
   /**
    * Claim an event for processing.
    *
-   * Returns the new row if this delivery is the first, or null if the event
-   * has already been seen. The claim is an INSERT that relies on the unique
-   * constraint — deliberately NOT a SELECT-then-INSERT, which races when a
-   * provider delivers the same event twice within milliseconds (Stripe does).
+   * Returns a row if this delivery should be handled now, or null if it should
+   * be skipped. Three cases, and the difference between them is what keeps a
+   * crashed handler recoverable:
+   *
+   *   never seen  — claim it and handle it.
+   *   processed   — skip. The work is done; a retry must not repeat it.
+   *   in flight   — skip. Another worker holds a fresh lease.
+   *   abandoned   — RE-CLAIM. Either the handler failed, or it was claimed and
+   *                 never finished, which means the process died partway
+   *                 through. Providers retry for exactly this reason and the
+   *                 retry is the only thing that will finish the job.
+   *
+   * That last case used to be treated as a duplicate. The consequence was
+   * specific and expensive: a crash between marking a payment paid and
+   * confirming its booking left the consult paid for and unconfirmed forever,
+   * with every one of Stripe's retries silently discarded.
+   *
+   * The whole thing is a single atomic statement. An INSERT ... ON CONFLICT DO
+   * UPDATE with a WHERE clause lets Postgres decide who wins; a read followed
+   * by a write loses when a provider delivers the same event twice in the same
+   * millisecond, which Stripe does.
    */
   async claim(
     provider: WebhookProvider,
@@ -33,29 +58,48 @@ export class WebhookEventRepository extends BaseRepository<WebhookEvent> {
     payload: Record<string, any>,
   ): Promise<WebhookEvent | null> {
     try {
-      const result = await this.webhookRepository
-        .createQueryBuilder()
-        .insert()
-        .into(WebhookEvent)
-        .values({
-          provider,
-          external_id: externalId,
-          event_type: eventType,
-          payload,
-          status: 'received',
-        })
-        .orIgnore() // ON CONFLICT DO NOTHING
-        .returning('*')
-        .execute();
+      // Long enough that a slow-but-live handler is not trampled, short enough
+      // that a crash is retried while the provider is still sending.
+      const staleAfter = new Date(Date.now() - LEASE_MS);
 
-      const row = result.raw?.[0];
+      const result = await this.webhookRepository.query(
+        `
+        INSERT INTO webhook_events
+          (provider, external_id, event_type, payload, status, claimed_at, attempts)
+        VALUES ($1, $2, $3, $4, 'received', now(), 1)
+        ON CONFLICT (provider, external_id) DO UPDATE
+          SET claimed_at = now(),
+              attempts   = webhook_events.attempts + 1,
+              status     = 'received'
+          WHERE webhook_events.status <> 'processed'
+            AND (webhook_events.claimed_at IS NULL
+                 OR webhook_events.claimed_at < $5)
+        RETURNING *
+        `,
+        [provider, externalId, eventType, payload, staleAfter],
+      );
+
+      const row = (result as WebhookEvent[])[0];
+
+      // No row came back: the WHERE clause rejected the update, so this event
+      // is either finished or being handled right now by someone else.
       if (!row) {
         this.logger.log(
-          `Duplicate ${provider} webhook ${externalId} (${eventType}) — already handled`,
+          `Skipping ${provider} webhook ${externalId} (${eventType}) — ` +
+            `already processed, or in flight elsewhere`,
         );
         return null;
       }
-      return row as WebhookEvent;
+
+      if (row.attempts > 1) {
+        this.logger.warn(
+          `Re-processing ${provider} webhook ${externalId} (${eventType}), ` +
+            `attempt ${row.attempts}. The previous attempt did not finish — ` +
+            `usually a restart mid-handler.`,
+        );
+      }
+
+      return row;
     } catch (error) {
       this.logger.error(
         `Failed to record ${provider} webhook ${externalId}: ${(error as Error).message}`,

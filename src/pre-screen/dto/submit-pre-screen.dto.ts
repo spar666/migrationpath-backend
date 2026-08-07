@@ -163,6 +163,47 @@ export class PreScreenSponsorDto {
   postcode?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(400)
+  business_address?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  sponsored_last_5_years?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  is_standard_business_sponsor?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  annual_revenue_band?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  years_operating_band?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  operates_only_in_australia?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  employee_count_band?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  has_temporary_visa_employees?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  referral_source?: string;
+
+  @IsOptional()
   @IsIn(['prospective', 'approved', 'lapsed', 'refused', 'unknown'])
   sponsorship_status?: string;
 
@@ -189,6 +230,11 @@ export class PreScreenNominationDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
+  position_title?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(8)
   subclass?: string;
 
@@ -196,6 +242,16 @@ export class PreScreenNominationDto {
   @IsNumber()
   @Min(0)
   annual_salary?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  salary_band?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  candidate_current_pay_band?: string;
 
   @IsOptional()
   @IsString()

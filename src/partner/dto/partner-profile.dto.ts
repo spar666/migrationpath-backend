@@ -1,4 +1,11 @@
-import { IsBoolean, IsEnum, IsInt, IsOptional, Min, Max } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  Min,
+  Max,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum ApplicantLocation {
@@ -36,7 +43,9 @@ export class PartnerProfileDto {
   sharedUtilityBills?: boolean;
 
   // ---- Nature of Household ----
-  @ApiPropertyOptional({ description: 'Shared responsibility for domestic bills' })
+  @ApiPropertyOptional({
+    description: 'Shared responsibility for domestic bills',
+  })
   @IsBoolean()
   @IsOptional()
   sharedDomesticBills?: boolean;
@@ -68,7 +77,9 @@ export class PartnerProfileDto {
   @IsOptional()
   form888Count?: number;
 
-  @ApiPropertyOptional({ description: 'Joint social invitations addressed to both' })
+  @ApiPropertyOptional({
+    description: 'Joint social invitations addressed to both',
+  })
   @IsBoolean()
   @IsOptional()
   jointSocialInvitations?: boolean;
@@ -80,7 +91,8 @@ export class PartnerProfileDto {
   livedTogether12Months?: boolean;
 
   @ApiPropertyOptional({
-    description: 'De facto relationship registered with an Australian State/Territory BDM',
+    description:
+      'De facto relationship registered with an Australian State/Territory BDM',
   })
   @IsBoolean()
   @IsOptional()

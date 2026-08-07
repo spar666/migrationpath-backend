@@ -16,8 +16,54 @@ export interface Pathway {
   visa_subclass?: string;
 }
 
+/**
+ * The advanced-search request body.
+ *
+ * `selectedOccupation` is a union because the frontend has sent it three ways
+ * over time — a bare string, and objects keyed on `occupation`, `value`,
+ * `label` or `title` depending on which picker produced it. Typing it as `any`
+ * hid that history; naming it means the next person can see what has to keep
+ * working and can delete a shape once nothing sends it.
+ */
+export interface AdvancedSearchBody {
+  q?: string;
+  selectedOccupation?: string | SelectedOccupation;
+  filters?: AdvancedSearchFilters;
+}
+
+export interface SelectedOccupation {
+  occupation?: string;
+  value?: string;
+  label?: string;
+  title?: string;
+}
+
+export interface AdvancedSearchFilters {
+  isRegional?: boolean;
+  visaSubclasses?: string[];
+}
+
 export interface SearchResult<T> {
   results: T;
+  /**
+   * Only present when the caller passes `debug`. Declared rather than attached
+   * behind a `@ts-ignore`: a field the compiler cannot see is a field no caller
+   * can safely read, and one nobody will remember to remove.
+   */
+  debug?: SearchDebugInfo;
+}
+
+/** Counts at each stage of the filter chain, for diagnosing an empty result. */
+export interface SearchDebugInfo {
+  totalCandidates: number;
+  afterFilters: number;
+  mappedCount: number;
+  sampleCourses: {
+    id: string;
+    courseTitle: string;
+    anzscoTitle: string;
+    universityName: string;
+  }[];
 }
 
 export interface PaginatedSearchResult {
@@ -85,12 +131,10 @@ export class SearchService {
       return {
         id: course.id,
         courseName: course.courseTitle,
-        university: (course as any).universityName || '',
+        university: course.universityName || '',
         anzscoCode: course.anzscoCode,
         occupation: this.resolveOccupationName(nameMap, course),
-        duration: (course as any).duration,
-        qualification: (course as any).qualification || null,
-        isRegional: (course as any).isRegional || false,
+        isRegional: course.isRegional || false,
         visaSubclasses: visaSubclasses,
       };
     });
@@ -132,12 +176,12 @@ export class SearchService {
   }
 
   async searchAdvanced(
-    body: any,
+    body: AdvancedSearchBody | undefined,
     page = 1,
     limit = 10,
     debug = false,
   ): Promise<SearchResult<any[]>> {
-    const { q, selectedOccupation, filters } = body || {};
+    const { q, selectedOccupation, filters } = body ?? {};
     const [allCourses, allInvitations, nameMap] = await Promise.all([
       this.courseRepository.find({}),
       this.invitationRepository.find({}),
@@ -158,21 +202,16 @@ export class SearchService {
       );
     }
 
-    let selectedOccRaw = '';
-    if (selectedOccupation) {
-      if (typeof selectedOccupation === 'object') {
-        selectedOccRaw =
-          selectedOccupation.occupation ||
-          selectedOccupation.value ||
-          selectedOccupation.label ||
-          selectedOccupation.title ||
-          '';
-      } else {
-        selectedOccRaw = selectedOccupation;
-      }
-    }
+    const selectedOccRaw =
+      typeof selectedOccupation === 'string'
+        ? selectedOccupation
+        : (selectedOccupation?.occupation ??
+          selectedOccupation?.value ??
+          selectedOccupation?.label ??
+          selectedOccupation?.title ??
+          '');
 
-    const selectedOcc = (selectedOccRaw || '').toString().trim().toLowerCase();
+    const selectedOcc = selectedOccRaw.trim().toLowerCase();
 
     if (selectedOcc) {
       const occ = selectedOcc;
@@ -194,7 +233,7 @@ export class SearchService {
 
     if (filters) {
       if (filters.isRegional === true) {
-        courses = courses.filter((course) => !!(course as any).isRegional);
+        courses = courses.filter((course) => course.isRegional);
       }
     }
     const mapped = courses
@@ -211,30 +250,27 @@ export class SearchService {
         return {
           id: course.id,
           courseName: course.courseTitle,
-          university: (course as any).universityName || '',
+          university: course.universityName || '',
           anzscoCode: course.anzscoCode,
           occupation: this.resolveOccupationName(nameMap, course),
-          duration: (course as any).duration,
-          qualification: (course as any).qualification || null,
-          isRegional: !!(course as any).isRegional,
+          isRegional: course.isRegional,
           visaSubclasses,
         };
       })
-      // remove courses with no visa subclasses when a visaSubclasses filter was provided
-      .filter((r) => {
-        if (
-          filters &&
-          Array.isArray(filters.visaSubclasses) &&
-          filters.visaSubclasses.length > 0
-        ) {
-          const courseVisa = r.visaSubclasses || [];
-          // If we don't have visa subclass data for the course (empty), don't exclude it —
-          // invitations were removed so visa data may be unavailable. Only filter when course has visa data.
-          if (courseVisa.length === 0) return true;
-          // Otherwise require at least one intersection
-          return courseVisa.some((v) => filters.visaSubclasses.includes(v));
-        }
-        return true;
+      // Drop courses that do not match the requested visa subclasses.
+      .filter((result) => {
+        // Hoisted so TypeScript keeps the narrowing inside the callback —
+        // reading filters.visaSubclasses again there would be possibly-undefined.
+        const wanted = filters?.visaSubclasses ?? [];
+        if (wanted.length === 0) return true;
+
+        // A course with NO visa data is kept rather than excluded: invitations
+        // were removed from some datasets, so an empty list means "unknown",
+        // not "matches nothing". Filtering only bites where we have data.
+        const courseVisa = result.visaSubclasses;
+        if (courseVisa.length === 0) return true;
+
+        return courseVisa.some((subclass) => wanted.includes(subclass));
       });
 
     // University name is stored directly on Course now
@@ -245,9 +281,11 @@ export class SearchService {
     const paged = results.slice(start, start + limit);
 
     if (debug) {
+      // Declared on the return type rather than smuggled past the compiler
+      // with @ts-ignore + `as any`. The suppression hid the shape from every
+      // caller, so nothing downstream could see the field it was adding.
       return {
         results: paged,
-        // @ts-ignore - attach debug info
         debug: {
           totalCandidates: allCourses.length,
           afterFilters: courses.length,
@@ -256,10 +294,10 @@ export class SearchService {
             id: c.id,
             courseTitle: c.courseTitle,
             anzscoTitle: c.anzscoTitle,
-            universityName: (c as any).universityName,
+            universityName: c.universityName,
           })),
         },
-      } as any;
+      };
     }
 
     return { results: paged };

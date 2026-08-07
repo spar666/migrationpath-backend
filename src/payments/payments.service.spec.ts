@@ -20,10 +20,14 @@ import { ConsultationBookingRepository } from '../consultation/consultation.repo
  */
 
 const sessionsCreate = jest.fn();
+const sessionsRetrieve = jest.fn();
 jest.mock('stripe', () =>
   jest.fn().mockImplementation(() => ({
     checkout: {
-      sessions: { create: (...a: unknown[]) => sessionsCreate(...a) },
+      sessions: {
+        create: (...a: unknown[]) => sessionsCreate(...a),
+        retrieve: (...a: unknown[]) => sessionsRetrieve(...a),
+      },
     },
   })),
 );
@@ -49,6 +53,7 @@ describe('PaymentsService.createConsultationCheckout', () => {
     create: jest.Mock;
     update: jest.Mock;
     hasPaidFor: jest.Mock;
+    findOpenSessionForBooking: jest.Mock;
   };
   let prospects: { findById: jest.Mock };
   let bookings: { findById: jest.Mock; findLatestForProspect: jest.Mock };
@@ -59,6 +64,9 @@ describe('PaymentsService.createConsultationCheckout', () => {
       create: jest.fn().mockResolvedValue({ id: 'payment-1' }),
       update: jest.fn().mockResolvedValue({}),
       hasPaidFor: jest.fn().mockResolvedValue(false),
+      // Null by default: no session already open for this booking, so checkout
+      // takes its normal path of creating one. The reuse tests override it.
+      findOpenSessionForBooking: jest.fn().mockResolvedValue(null),
     };
     prospects = { findById: jest.fn().mockResolvedValue(PROSPECT) };
     bookings = {
@@ -121,6 +129,54 @@ describe('PaymentsService.createConsultationCheckout', () => {
       expect(sessionsCreate).not.toHaveBeenCalled();
     });
 
+    it('rejects an amount put where the Price id belongs', async () => {
+      // The obvious misreading of STRIPE_CONSULT_PRICE_ID, and one that had
+      // already been made: it was set to `0.01`. Left to Stripe this surfaces
+      // as a generic session failure and the visitor is told to try again
+      // shortly — advice that cannot work, for a fault entirely on our side.
+      config['integrations.stripe.consultPriceId'] = '0.01';
+      await build();
+
+      await expect(
+        service.createConsultationCheckout({ prospect_id: 'prospect-1' }),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects the Product id, and says which one it is', async () => {
+      // The likeliest mistake by far: prod_ and price_ sit next to each other
+      // on the same dashboard page. A message that only says "not a Price id"
+      // leaves someone staring at an id that looks exactly right to them.
+      const logged: string[] = [];
+      config['integrations.stripe.consultPriceId'] = 'prod_Tjcd1bj3pWGwNg';
+      await build();
+      jest
+        .spyOn(service['logger'], 'error')
+        .mockImplementation((message: unknown) => {
+          logged.push(String(message));
+        });
+
+      await expect(
+        service.createConsultationCheckout({ prospect_id: 'prospect-1' }),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+      expect(logged.join(' ')).toMatch(/PRODUCT id/i);
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    });
+
+    it('accepts a real Price id', async () => {
+      // The other half of the guard: it must not reject valid configuration.
+      config['integrations.stripe.consultPriceId'] = 'price_1AbCdEf';
+      await build();
+
+      await service.createConsultationCheckout({ prospect_id: 'prospect-1' });
+
+      const [params] = sessionsCreate.mock.calls[0];
+      expect(params.line_items).toEqual([
+        { price: 'price_1AbCdEf', quantity: 1 },
+      ]);
+    });
+
     it('refuses when the return URLs are missing', async () => {
       delete config['integrations.stripe.successUrl'];
       await build();
@@ -130,6 +186,65 @@ describe('PaymentsService.createConsultationCheckout', () => {
           prospect_id: 'prospect-1',
         }),
       ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    });
+  });
+
+  /**
+   * Every checkout session is a live, chargeable link that stays payable until
+   * Stripe expires it. A page reload, or a first attempt that died between our
+   * row being written and Stripe answering, must not leave two of them against
+   * one booking — whichever the visitor happens to open, the other is still a
+   * way to be charged again.
+   */
+  describe('reusing an open session', () => {
+    const openPayment = {
+      id: 'payment-old',
+      provider_session_id: 'cs_test_open',
+    };
+
+    it('hands back the existing session instead of minting a second', async () => {
+      payments.findOpenSessionForBooking.mockResolvedValue(openPayment);
+      sessionsRetrieve.mockResolvedValue({
+        status: 'open',
+        url: 'https://checkout.stripe.com/c/pay/cs_test_open',
+      });
+
+      const result = await service.createConsultationCheckout({
+        prospect_id: 'prospect-1',
+      });
+
+      expect(sessionsCreate).not.toHaveBeenCalled();
+      expect(result.checkout_url).toContain('cs_test_open');
+      expect(result.payment_id).toBe('payment-old');
+    });
+
+    it('creates a fresh one when Stripe has closed the old session', async () => {
+      // Handing back a dead link looks to the visitor exactly like a broken
+      // pay button, which is worse than the duplicate it was avoiding.
+      payments.findOpenSessionForBooking.mockResolvedValue(openPayment);
+      sessionsRetrieve.mockResolvedValue({ status: 'expired', url: null });
+
+      await service.createConsultationCheckout({ prospect_id: 'prospect-1' });
+
+      expect(sessionsCreate).toHaveBeenCalled();
+      expect(payments.update).toHaveBeenCalledWith('payment-old', {
+        status: 'expired',
+      });
+    });
+
+    it('still takes the payment when Stripe cannot be reached', async () => {
+      // A possible duplicate session is visible and refundable. A refused
+      // payment is a lost sale, which is the worse of the two.
+      jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
+      payments.findOpenSessionForBooking.mockResolvedValue(openPayment);
+      sessionsRetrieve.mockRejectedValue(new Error('stripe down'));
+
+      const result = await service.createConsultationCheckout({
+        prospect_id: 'prospect-1',
+      });
+
+      expect(sessionsCreate).toHaveBeenCalled();
+      expect(result.checkout_url).toContain('cs_test_123');
     });
   });
 
@@ -253,30 +368,74 @@ describe('PaymentsService.createConsultationCheckout', () => {
       );
     });
 
-    it('marks the row failed when Stripe rejects the call', async () => {
-      sessionsCreate.mockRejectedValue(new Error('card_declined'));
+    it('marks the row failed when Stripe DEFINITELY rejected the call', async () => {
+      // Stripe answered and said no, so no session exists. Writing the row off
+      // is correct and keeps it out of the reconciliation sweep.
+      sessionsCreate.mockRejectedValue(
+        Object.assign(new Error('No such price'), {
+          type: 'StripeInvalidRequestError',
+        }),
+      );
 
       await expect(
-        service.createConsultationCheckout({
-          prospect_id: 'prospect-1',
-        }),
+        service.createConsultationCheckout({ prospect_id: 'prospect-1' }),
       ).rejects.toThrow();
       expect(payments.update).toHaveBeenCalledWith('payment-1', {
         status: 'failed',
       });
     });
 
-    it('treats a session with no URL as a failure', async () => {
+    it('does NOT write the row off when we never got an answer', async () => {
+      // A timeout is not a refusal. Stripe may well have created a session
+      // that is sitting there payable, and marking this failed removed it from
+      // the reconciliation sweep — so a visitor could pay through a session we
+      // had written off, and nothing would ever confirm the booking.
+      jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
+      sessionsCreate.mockRejectedValue(
+        Object.assign(new Error('socket hang up'), {
+          type: 'StripeConnectionError',
+        }),
+      );
+
+      await expect(
+        service.createConsultationCheckout({ prospect_id: 'prospect-1' }),
+      ).rejects.toThrow();
+
+      expect(payments.update).not.toHaveBeenCalledWith('payment-1', {
+        status: 'failed',
+      });
+    });
+
+    it('treats an unrecognised error as unknown, not as a rejection', async () => {
+      // Fails safe. A bug in our own code between the call and the check
+      // should not silently write off a payment that may exist.
+      jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
+      sessionsCreate.mockRejectedValue(new Error('something odd'));
+
+      await expect(
+        service.createConsultationCheckout({ prospect_id: 'prospect-1' }),
+      ).rejects.toThrow();
+
+      expect(payments.update).not.toHaveBeenCalledWith('payment-1', {
+        status: 'failed',
+      });
+    });
+
+    it('records the session id even when it comes back unusable', async () => {
+      // A session with no URL is useless to us and still a real, payable object
+      // at Stripe. Throwing without storing the id would leave a row that
+      // nothing could ever match a payment to.
+      jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
       sessionsCreate.mockResolvedValue({ id: 'cs_1', url: null });
 
       await expect(
-        service.createConsultationCheckout({
-          prospect_id: 'prospect-1',
-        }),
+        service.createConsultationCheckout({ prospect_id: 'prospect-1' }),
       ).rejects.toThrow();
-      expect(payments.update).toHaveBeenCalledWith('payment-1', {
-        status: 'failed',
-      });
+
+      expect(payments.update).toHaveBeenCalledWith(
+        'payment-1',
+        expect.objectContaining({ provider_session_id: 'cs_1' }),
+      );
     });
   });
 
@@ -342,5 +501,87 @@ describe('PaymentsService.createConsultationCheckout', () => {
         }),
       ).rejects.toBeInstanceOf(ServiceUnavailableException);
     });
+  });
+});
+
+/**
+ * Closing off a session that ended without money.
+ *
+ * The one write in this service that could destroy value rather than merely
+ * fail to record it: Stripe does not guarantee event ordering, so an `expired`
+ * arriving after a `paid` must not un-pay a real payment.
+ */
+describe('PaymentsService.markSessionUnpaid', () => {
+  let service: PaymentsService;
+  let payments: {
+    findBySessionId: jest.Mock;
+    update: jest.Mock;
+    findOpenSessionForBooking: jest.Mock;
+  };
+  let config: Record<string, string>;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    config = { ...CONFIG };
+    payments = {
+      findBySessionId: jest.fn().mockResolvedValue({
+        id: 'payment-1',
+        status: 'created',
+      }),
+      update: jest.fn().mockResolvedValue({ id: 'payment-1' }),
+      findOpenSessionForBooking: jest.fn().mockResolvedValue(null),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        PaymentsService,
+        {
+          provide: ConfigService,
+          useValue: { get: (key: string) => config[key] },
+        },
+        { provide: PaymentRepository, useValue: payments },
+        { provide: ProspectService, useValue: { findById: jest.fn() } },
+        {
+          provide: ConsultationBookingRepository,
+          useValue: { findById: jest.fn(), findLatestForProspect: jest.fn() },
+        },
+      ],
+    }).compile();
+
+    service = module.get<PaymentsService>(PaymentsService);
+  });
+
+  it('marks an expired session expired', async () => {
+    await service.markSessionUnpaid('cs_1', 'expired');
+    expect(payments.update).toHaveBeenCalledWith('payment-1', {
+      status: 'expired',
+    });
+  });
+
+  it('marks a failed async payment failed', async () => {
+    await service.markSessionUnpaid('cs_1', 'failed');
+    expect(payments.update).toHaveBeenCalledWith('payment-1', {
+      status: 'failed',
+    });
+  });
+
+  it('REFUSES to un-pay a payment that already settled', async () => {
+    // Stripe does not guarantee ordering. Without this, a late `expired` for a
+    // session that was paid first would rewrite a real payment as abandoned —
+    // and the money would be gone from our records while still being in the
+    // customer's statement.
+    jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
+    payments.findBySessionId.mockResolvedValue({
+      id: 'payment-1',
+      status: 'paid',
+    });
+
+    await service.markSessionUnpaid('cs_1', 'expired');
+    expect(payments.update).not.toHaveBeenCalled();
+  });
+
+  it('returns null when there is no local row', async () => {
+    payments.findBySessionId.mockResolvedValue(null);
+    expect(await service.markSessionUnpaid('cs_unknown', 'expired')).toBeNull();
   });
 });

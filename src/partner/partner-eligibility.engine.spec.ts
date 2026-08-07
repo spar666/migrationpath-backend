@@ -9,6 +9,7 @@ function baseAnswers(
     applicantFirstName: 'A',
     sponsorFirstName: 'S',
     completedBy: 'Applicant',
+    consent_given: true,
     applicantCountry: 'Australia',
     sponsorResidencyStatus: 'Australian citizen by birth',
     relationshipStatus: 'Married',

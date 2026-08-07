@@ -1,0 +1,30 @@
+import { Nomination } from './nomination.entity';
+export type SponsorStatus = 'prospective' | 'approved' | 'lapsed' | 'refused' | 'unknown';
+export declare class Sponsor {
+    id: string;
+    prospect_id: string;
+    legal_name: string;
+    trading_name?: string;
+    abn?: string;
+    industry?: string;
+    employee_count?: number;
+    years_trading?: number;
+    state?: string;
+    postcode?: string;
+    business_address?: string;
+    sponsored_last_5_years?: boolean | null;
+    is_standard_business_sponsor?: boolean | null;
+    annual_revenue_band?: string;
+    years_operating_band?: string;
+    operates_only_in_australia?: boolean | null;
+    employee_count_band?: string;
+    has_temporary_visa_employees?: boolean | null;
+    referral_source?: string;
+    sponsorship_status: SponsorStatus;
+    has_adverse_information?: boolean | null;
+    meets_training_obligations?: boolean | null;
+    raw_answers?: Record<string, any>;
+    created_at: Date;
+    updated_at: Date;
+    nominations: Nomination[];
+}

@@ -5,9 +5,7 @@ import {
   DEFAULT_VISA_GROUP,
 } from '../../points-engine/constants/points-catalogue';
 
-export class SeedStructuredPointsRules1790000000000
-  implements MigrationInterface
-{
+export class SeedStructuredPointsRules1790000000000 implements MigrationInterface {
   name = 'SeedStructuredPointsRules1790000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

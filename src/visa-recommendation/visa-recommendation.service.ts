@@ -33,7 +33,10 @@ export class VisaRecommendationService {
       await this.occupationsService.getEligibleVisas(anzscoCode);
     if (!eligibleVisas.length) return [];
 
-    const passMark = await this.policyConfig.getNumber('points.gsmPassMark', 65);
+    const passMark = await this.policyConfig.getNumber(
+      'points.gsmPassMark',
+      65,
+    );
     const meetsPassMark = points.totalPoints >= passMark;
 
     return eligibleVisas.map((visa) => {

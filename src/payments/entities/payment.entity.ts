@@ -9,12 +9,15 @@ import {
 
 export type PaymentPurpose = 'consultation' | 'service_fee' | 'other';
 
+/**
+ * `duplicate` is not a state anything transitions into deliberately. It exists
+ * so that a second `paid` row for the same consultation — which the unique
+ * index now prevents, but which older data may contain — can be set aside
+ * without being deleted. A payment row is evidence; two of them is something a
+ * person needs to look at, not something a migration should quietly destroy.
+ */
 export type PaymentStatus =
-  | 'created'
-  | 'paid'
-  | 'failed'
-  | 'expired'
-  | 'refunded';
+  'created' | 'paid' | 'failed' | 'expired' | 'refunded' | 'duplicate';
 
 /**
  * A payment attempt.
