@@ -12,6 +12,27 @@ import helmet from 'helmet';
 import compression from 'compression';
 import express from 'express';
 
+/**
+ * How long Vercel lets one invocation run.
+ *
+ * Set here rather than in vercel.json because that file uses the legacy
+ * `builds` property, and Vercel rejects a config that carries both `builds`
+ * and `functions`. For an @vercel/node function this exported `config` is the
+ * supported alternative.
+ *
+ * 300 is the ceiling on Hobby and also the current default, so this is really
+ * documentation: it pins the value against a future change to Vercel's
+ * defaults, and states out loud that we want the longest run this plan allows.
+ * On Pro the maximum rises to 800s if a cold start ever genuinely needs it.
+ *
+ * Worth knowing this does NOT give the webhook handler more room. Stripe
+ * abandons a delivery after about 30 seconds and records it failed, so for
+ * anything Stripe is waiting on, THIRTY seconds is the real budget regardless
+ * of what is set here. This only helps slow non-webhook requests — a cold start
+ * connecting TypeORM before it can serve, most likely.
+ */
+export const config = { maxDuration: 300 };
+
 const server = express();
 let cachedServer: express.Express;
 
