@@ -7,6 +7,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { installRequestUrlNormalizer } from './common/middleware/normalize-request-url.middleware';
 import helmet from 'helmet';
 import compression from 'compression';
 
@@ -45,6 +46,12 @@ async function bootstrap() {
           : Number(trustProxy);
     app.set('trust proxy', value);
   }
+
+  // --- Request line normalisation ---
+  // Hooks the HTTP server ahead of Express, because Express's router parses
+  // `req.url` before any `app.use()` middleware runs. Keeps `parseurl` on its
+  // fast path so the runtime-deprecated `url.parse()` is never called.
+  installRequestUrlNormalizer(app.getHttpServer());
 
   // --- Security ---
   app.use(helmet());

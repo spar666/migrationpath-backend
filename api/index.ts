@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter';
 import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
 import { LoggingInterceptor } from '../src/common/interceptors/logging.interceptor';
+import { normalizeRequestUrl } from '../src/common/middleware/normalize-request-url.middleware';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -96,5 +97,8 @@ export default async function handler(req: any, res: any) {
   if (!cachedServer) {
     cachedServer = await bootstrap();
   }
+  // There is no HTTP server of ours to hook here — Vercel hands us req/res —
+  // so normalise directly before Express's router parses the request target.
+  normalizeRequestUrl(req);
   cachedServer(req, res);
 }
