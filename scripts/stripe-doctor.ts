@@ -198,6 +198,64 @@ interface EndpointReport {
   willDeliver(eventType: string): boolean;
 }
 
+/**
+ * The canonical path, from `@Controller('webhooks/stripe')` plus the
+ * `api/v1` global prefix set in main.ts and api/index.ts.
+ */
+const WEBHOOK_PATH = '/api/v1/webhooks/stripe';
+
+/**
+ * Faults visible in the endpoint URL alone, before anything is delivered.
+ *
+ * Worth its own check because a redirect is invisible from the Stripe
+ * dashboard's summary and produces the same evidence as a dead server: failed
+ * deliveries, and bookings that stay pending after the money is taken.
+ *
+ * Stripe does NOT follow redirects. A 308 is a failed delivery, not a detour —
+ * so a URL one character off, a trailing slash, is indistinguishable in its
+ * consequences from having no endpoint at all.
+ */
+function urlProblems(raw: string): string[] {
+  const problems: string[] = [];
+
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return [`"${raw}" is not a valid URL.`];
+  }
+
+  // The observed failure: Vercel normalises a trailing slash with a 308 to the
+  // clean path, Stripe does not follow it, and every delivery fails.
+  if (url.pathname.endsWith('/') && url.pathname !== '/') {
+    problems.push(
+      `URL ends in a slash. The host answers that with a 308 redirect to ` +
+        `${url.pathname.replace(/\/+$/, '')}, and Stripe does not follow ` +
+        `redirects — so every delivery to this endpoint FAILS. Remove the ` +
+        `trailing slash in the dashboard.`,
+    );
+  }
+
+  if (url.protocol !== 'https:') {
+    problems.push(
+      `URL is ${url.protocol}//. Stripe requires https for live endpoints, ` +
+        `and an http URL is usually redirected, which Stripe will not follow.`,
+    );
+  }
+
+  const path = url.pathname.replace(/\/+$/, '');
+  if (path !== WEBHOOK_PATH) {
+    problems.push(
+      `Path is "${path}", but this application serves the Stripe webhook at ` +
+        `"${WEBHOOK_PATH}". Anything else is a 404, or — if it is the frontend ` +
+        `domain — the SPA's index.html with a 200, which looks like a ` +
+        `successful delivery and confirms nothing.`,
+    );
+  }
+
+  return problems;
+}
+
 async function checkEndpoints(stripe: Stripe): Promise<EndpointReport> {
   heading('Webhook endpoints');
 
@@ -227,6 +285,8 @@ async function checkEndpoints(stripe: Stripe): Promise<EndpointReport> {
 
   for (const endpoint of ours) {
     say(`  ${endpoint.url}`);
+
+    for (const problem of urlProblems(endpoint.url)) bad(problem);
 
     if (endpoint.status !== 'enabled') {
       bad(

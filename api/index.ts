@@ -20,6 +20,20 @@ async function bootstrap(): Promise<express.Express> {
     AppModule,
     new ExpressAdapter(server),
     {
+      // Required by the Stripe and Calendly webhook controllers, exactly as in
+      // main.ts. Both verify a signature computed over the EXACT bytes the
+      // provider sent, and parsing the JSON then re-serialising it does not
+      // round-trip (key order, unicode escapes, whitespace).
+      //
+      // This was missing here while main.ts had it, which is the worst shape
+      // for a bug of this kind: local development verifies webhooks fine and
+      // production rejects every single one. `request.rawBody` is undefined
+      // without it, so the controller throws before the signature is even
+      // checked — meaning a correct STRIPE_WEBHOOK_SECRET makes no difference,
+      // and the failure looks identical to a wrong one.
+      //
+      // Consequence when absent: payments succeed and bookings never confirm.
+      rawBody: true,
       logger:
         process.env.NODE_ENV === 'production'
           ? ['error', 'warn', 'log']
