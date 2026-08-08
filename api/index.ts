@@ -34,7 +34,25 @@ import express from 'express';
 export const config = { maxDuration: 300 };
 
 const server = express();
-let cachedServer: express.Express;
+
+/**
+ * The in-flight bootstrap, NOT the finished app.
+ *
+ * Caching the resolved value instead is a race: `cachedServer` would only be
+ * assigned after `await bootstrap()` resolved, so every request that arrived
+ * during those seconds would see it still undefined and start its own
+ * bootstrap. Under fluid compute a single instance serves concurrent
+ * invocations, so that is not hypothetical — a cold instance hit by two
+ * requests at once would build two Nest applications on top of this ONE
+ * express server, registering every route and every piece of middleware twice
+ * and opening a second TypeORM pool. The symptoms are indirect and awful:
+ * duplicated interceptor work, doubled connection counts, and whichever
+ * handler Express reaches first winning.
+ *
+ * Storing the promise makes the first caller do the work and everyone else
+ * await the same result.
+ */
+let bootstrapPromise: Promise<express.Express> | null = null;
 
 async function bootstrap(): Promise<express.Express> {
   const app = await NestFactory.create(
@@ -77,7 +95,9 @@ async function bootstrap(): Promise<express.Express> {
     maxAge: 86400,
   });
 
-  app.setGlobalPrefix(apiPrefix, { exclude: ['health'] });
+  // Mirrors main.ts, including the '/' exclusion. Without it the root path is
+  // a 404 in production only, which is exactly where uptime probes point.
+  app.setGlobalPrefix(apiPrefix, { exclude: ['health', '/'] });
 
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
@@ -129,11 +149,22 @@ async function bootstrap(): Promise<express.Express> {
 }
 
 export default async function handler(req: any, res: any) {
-  if (!cachedServer) {
-    cachedServer = await bootstrap();
+  if (!bootstrapPromise) {
+    bootstrapPromise = bootstrap().catch((error) => {
+      // Clear the cache on failure so the next invocation gets a fresh
+      // attempt. Without this a single transient failure — a database
+      // unreachable for a moment during a cold start — is latched into the
+      // instance, and every subsequent request rejects with the same stale
+      // error until the instance is recycled.
+      bootstrapPromise = null;
+      throw error;
+    });
   }
+
+  const app = await bootstrapPromise;
+
   // There is no HTTP server of ours to hook here — Vercel hands us req/res —
   // so normalise directly before Express's router parses the request target.
   normalizeRequestUrl(req);
-  cachedServer(req, res);
+  app(req, res);
 }

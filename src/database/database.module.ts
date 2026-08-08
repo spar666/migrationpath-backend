@@ -39,7 +39,22 @@ const sourceExtensions =
         // decision written twice, which is how they drifted.
         entities: [join(__dirname, `../**/*.entity${sourceExtensions}`)],
         migrations: [join(__dirname, `./migrations/*${sourceExtensions}`)],
-        migrationsRun: true,
+        // Off on Vercel, where the `vercel-build` script already ran the
+        // migrations against `dist/` at BUILD time — once, on one machine,
+        // before any traffic.
+        //
+        // Leaving it on there is worse than redundant. @vercel/node traces the
+        // files the code imports, and nothing imports a migration — they are
+        // only ever found by the glob above — so what ships is whatever
+        // `includeFiles` copies in, which is the `.ts` sources. The production
+        // glob looks for `.js`. It matches nothing, TypeORM reports success
+        // having done nothing, and MigrationStatusService logs its "no
+        // migration files were found" error on every single cold start.
+        //
+        // The remaining risk is the one this replaces: several cold instances
+        // starting at once and each running the set concurrently, which
+        // `migrationsTransactionMode: 'each'` does not protect against.
+        migrationsRun: process.env.VERCEL !== '1',
         migrationsTransactionMode: 'each',
         synchronize: false,
         logging: configService.get<string>('app.nodeEnv') !== 'production',

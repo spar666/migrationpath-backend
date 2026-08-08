@@ -27,6 +27,15 @@ export class MigrationStatusService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap(): Promise<void> {
     try {
+      // On Vercel the runtime has no migration FILES to find, by design — see
+      // the `migrationsRun` comment in database.module.ts. The file-based check
+      // below would fire its loudest error on every cold start and mean
+      // nothing, so ask the database what it has applied instead.
+      if (process.env.VERCEL === '1') {
+        await this.reportAppliedMigrations();
+        return;
+      }
+
       const discovered = this.dataSource.migrations.length;
 
       // The glob matched nothing. Distinct from "all migrations are applied",
@@ -61,5 +70,35 @@ export class MigrationStatusService implements OnApplicationBootstrap {
         `Could not verify migration status: ${(error as Error).message}`,
       );
     }
+  }
+
+  /**
+   * What the DATABASE says has been applied, for the deployment where the
+   * files are not present to compare against.
+   *
+   * This cannot tell you the schema is up to date with the code — only the
+   * build that ran `migration:run` knows that. What it can catch is the
+   * failure that matters most and is otherwise silent: an empty or missing
+   * migrations table, meaning `vercel-build` never applied anything and the
+   * schema is whatever it was before this deploy.
+   */
+  private async reportAppliedMigrations(): Promise<void> {
+    const rows = await this.dataSource.query<Array<{ name: string }>>(
+      'SELECT name FROM migrations ORDER BY timestamp DESC LIMIT 1',
+    );
+
+    if (rows.length === 0) {
+      this.logger.error(
+        'The migrations table is empty. Nothing has ever been applied to this ' +
+          'database, so the schema is almost certainly behind the code. Check ' +
+          'that the `vercel-build` script succeeded on the last deploy.',
+      );
+      return;
+    }
+
+    this.logger.log(
+      `Schema last migrated by "${rows[0].name}" (applied at build time; the ` +
+        `runtime does not carry migration files on Vercel).`,
+    );
   }
 }

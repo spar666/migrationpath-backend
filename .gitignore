@@ -6,3 +6,8 @@ node_modules
 
 # Vercel
 .vercel
+
+.env
+.env.*
+*.swp
+*.swo
