@@ -23,7 +23,6 @@ import { AdminModule } from './admin/admin.module';
 import { SearchModule } from './search/search.module';
 import { OccupationsModule } from './occupations/occupations.module';
 import { PointsEngineModule } from './points-engine/points-engine.module';
-import { VisaRecommendationModule } from './visa-recommendation/visa-recommendation.module';
 import { ConsultationModule } from './consultation/consultation.module';
 import { CmsModule } from './cms/cms.module';
 import { MigrationRuleModule } from './migration-rules/migration-rule.module';
@@ -81,7 +80,6 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
     SearchModule,
     OccupationsModule,
     PointsEngineModule,
-    VisaRecommendationModule,
     PartnerModule,
     PolicyConfigModule,
     DataFreshnessModule,
