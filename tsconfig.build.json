@@ -1,7 +1,13 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": "./src"
+    "rootDir": "./src",
+    // Must live inside outDir. `nest-cli.json` sets `deleteOutDir`, so dist is
+    // wiped before every build; a tsbuildinfo written outside it survives that
+    // wipe, tells tsc every file is already emitted, and the build then emits
+    // nothing into the directory it just deleted. Keeping the two together
+    // means they are always invalidated as a pair.
+    "tsBuildInfoFile": "./dist/tsconfig.build.tsbuildinfo"
   },
   "exclude": [
     "node_modules",
@@ -9,7 +15,6 @@
     "dist",
     "api",
     "scripts",
-    "**/*spec.ts",
-    "*.ts"
+    "**/*spec.ts"
   ]
 }

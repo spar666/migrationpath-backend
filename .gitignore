@@ -1,13 +1,26 @@
 node_modules
-# Keep environment variables out of version control
-.env
 
+# Environment variables
+.env
+.env.*
+
+# Build output. `nest build` regenerates this; it was tracked in git until
+# recently, which made every build show up as a 700-file diff. The incremental
+# tsbuildinfo files live inside dist on purpose — see tsconfig.build.json.
+dist
+*.tsbuildinfo
 /generated/prisma
+
+# Yarn Plug'n'Play. The project installs from package-lock.json; these are
+# leftovers from an abandoned Yarn setup and nothing loads them.
+.pnp.cjs
+.pnp.loader.mjs
+.yarn
 
 # Vercel
 .vercel
 
-.env
-.env.*
+# Editor
 *.swp
 *.swo
+.claude
