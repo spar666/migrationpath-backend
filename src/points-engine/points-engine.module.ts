@@ -2,10 +2,9 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PointsEngineService } from './points-engine.service';
 import { PointsEngineController } from './points-engine.controller';
-import { PointsConfigRepository } from './points-config.repository';
-import { PointsConfig } from './entities/points-config.entity';
 import { PointsCalculatorService } from './points-calculator/points-calculator.service';
 import { PointsAggregatorService } from './points-aggregator.service';
+import { PointsCaptureService } from './points-capture.service';
 import { PointsRule } from './entities/points-rule.entity';
 import { PointsRuleRepository } from './points-rule.repository';
 import { PointsRuleService } from './points-rule.service';
@@ -14,31 +13,35 @@ import { UserPointsRepository } from './user-points.repository';
 import { UserPointsService } from './user-points.service';
 import { OccupationsModule } from '../occupations/occupations.module';
 import { PolicyConfigModule } from '../policy-config/policy-config.module';
+import { ProspectModule } from '../prospect/prospect.module';
+import { LeadsModule } from '../leads/leads.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PointsConfig, PointsRule, UserPoints]),
+    TypeOrmModule.forFeature([PointsRule, UserPoints]),
     OccupationsModule,
     PolicyConfigModule,
+    ProspectModule,
+    LeadsModule,
   ],
   controllers: [PointsEngineController],
   providers: [
     PointsEngineService,
     PointsRuleService,
-    PointsConfigRepository,
     PointsRuleRepository,
     PointsCalculatorService,
     PointsAggregatorService,
+    PointsCaptureService,
     UserPointsRepository,
     UserPointsService,
   ],
   exports: [
     PointsEngineService,
     PointsRuleService,
-    PointsConfigRepository,
     PointsRuleRepository,
     PointsCalculatorService,
     PointsAggregatorService,
+    PointsCaptureService,
     UserPointsService,
   ],
 })

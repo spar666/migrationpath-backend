@@ -51,6 +51,22 @@ export class PolicyConfigService {
     return typeof value === 'number' && !Number.isNaN(value) ? value : fallback;
   }
 
+  /**
+   * Newest `effective_date` across a category, or null if none is stamped.
+   *
+   * Backs the "current as of {date}" line shown with a points score. It reads
+   * the date an admin recorded rather than a build constant, so confirming the
+   * legislation is a config edit and not a deploy.
+   */
+  async latestEffectiveDate(category: string): Promise<string | null> {
+    const rows = await this.repo.find({ where: { category } });
+    const dates = rows
+      .map((row) => row.effectiveDate)
+      .filter((date): date is string => !!date)
+      .sort();
+    return dates.length ? dates[dates.length - 1] : null;
+  }
+
   async findAll(): Promise<PolicyConfig[]> {
     return this.repo.find({ order: { category: 'ASC', label: 'ASC' } });
   }

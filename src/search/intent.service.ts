@@ -1,13 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Course } from '../courses/entities/course.entity';
 import {
   OccupationsService,
   EligibleVisa,
 } from '../occupations/occupations.service';
 
-export type MigrationIntent = 'SKILLED' | 'STUDENT' | 'FAMILY' | 'UNKNOWN';
+export type MigrationIntent = 'SKILLED' | 'FAMILY' | 'UNKNOWN';
 
 export interface SkilledIntentResult {
   intent: 'SKILLED';
@@ -21,21 +18,6 @@ export interface SkilledIntentResult {
   /** Split-screen: both streams are always returned (either may be empty). */
   pointsTested: EligibleVisa[];
   employerSponsored: EligibleVisa[];
-}
-
-export interface StudentCourse {
-  id: string;
-  courseName: string;
-  university: string;
-  isRegional: boolean;
-  anzscoCode: string | null;
-  occupation: string | null;
-}
-
-export interface StudentIntentResult {
-  intent: 'STUDENT';
-  query: string;
-  courses: StudentCourse[];
 }
 
 export interface FamilyIntentResult {
@@ -56,7 +38,6 @@ export interface UnknownIntentResult {
 
 export type IntentResult =
   | SkilledIntentResult
-  | StudentIntentResult
   | FamilyIntentResult
   | UnknownIntentResult;
 
@@ -94,17 +75,12 @@ const RELATIONSHIP_KEYWORDS = [
 
 const FAMILY_REDIRECT = '/pathways/partner';
 const AUDIT_REDIRECT = '/pathways/onshore';
-const STUDENT_COURSE_LIMIT = 12;
 
 @Injectable()
 export class IntentService {
   private readonly logger = new Logger(IntentService.name);
 
-  constructor(
-    private readonly occupationsService: OccupationsService,
-    @InjectRepository(Course)
-    private readonly courseRepository: Repository<Course>,
-  ) {}
+  constructor(private readonly occupationsService: OccupationsService) {}
 
   async classify(rawQuery: string): Promise<IntentResult> {
     const query = (rawQuery ?? '').trim();
@@ -137,13 +113,11 @@ export class IntentService {
       if (skilled) return skilled;
     }
 
-    // 4. Course / university / degree match -> STUDENT.
-    const courses = await this.findCourses(query);
-    if (courses.length > 0) {
-      return { intent: 'STUDENT', query, courses };
-    }
-
-    // 5. No confident classification.
+    // 4. No confident classification.
+    //
+    // STUDENT used to sit here: a course/university/degree match returned a
+    // course list. It went with the courses module — with no course table there
+    // is nothing to match on, so those queries now fall through to UNKNOWN.
     return {
       intent: 'UNKNOWN',
       query,
@@ -214,29 +188,6 @@ export class IntentService {
       );
       return null;
     }
-  }
-
-  private async findCourses(query: string): Promise<StudentCourse[]> {
-    const like = `%${query.toLowerCase()}%`;
-    const rows = await this.courseRepository
-      .createQueryBuilder('course')
-      .where('course.isActive = :active', { active: true })
-      .andWhere(
-        '(LOWER(course.courseTitle) LIKE :like OR LOWER(course.universityName) LIKE :like OR LOWER(course.anzscoTitle) LIKE :like)',
-        { like },
-      )
-      .orderBy('course.courseTitle', 'ASC')
-      .take(STUDENT_COURSE_LIMIT)
-      .getMany();
-
-    return rows.map((course) => ({
-      id: course.id,
-      courseName: course.courseTitle,
-      university: course.universityName,
-      isRegional: course.isRegional,
-      anzscoCode: course.anzscoCode ?? null,
-      occupation: course.anzscoTitle ?? null,
-    }));
   }
 
   private escapeRegex(value: string): string {

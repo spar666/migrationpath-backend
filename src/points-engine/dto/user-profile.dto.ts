@@ -101,4 +101,17 @@ export class StructuredPointsResultDto {
     description: 'Reason the applicant is ineligible, if any',
   })
   ineligibilityReason?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Date the point values were last confirmed against the legislation (ISO date). Null if no admin has stamped one yet.',
+    example: '2024-11-16',
+  })
+  currentAsOf?: string | null;
+
+  @ApiProperty({
+    description: 'Shown alongside any score. Not migration advice.',
+    example: 'General information only, not migration advice.',
+  })
+  disclaimer: string;
 }

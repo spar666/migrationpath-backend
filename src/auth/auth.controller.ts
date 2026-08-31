@@ -15,23 +15,22 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { SignUpDto } from './dto/sign-up.dto';
 import { SignInDto } from './dto/sign-in.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
+/**
+ * Self-service account endpoints (`POST /auth/signup` and the two
+ * `/auth/password-reset/*` routes) were removed with the end-user account
+ * layer. What is left is the sign-in path, which admin depends on: there is no
+ * separate admin login — an admin authenticates here like anyone else and is
+ * distinguished only by the `role` claim RolesGuard reads off the token.
+ *
+ * Accounts are provisioned out of band now. Nothing in the API creates one.
+ */
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
-
-  @Post('signup')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Register a new user account' })
-  @ApiResponse({ status: 201, description: 'User created' })
-  @ApiResponse({ status: 409, description: 'Email already in use' })
-  signUp(@Body() dto: SignUpDto) {
-    return this.authService.signUp(dto);
-  }
 
   @Post('signin')
   @HttpCode(HttpStatus.OK)
@@ -71,20 +70,6 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Returns a new access token' })
   refresh(@Body('refreshToken') refreshToken: string) {
     return this.authService.refresh(refreshToken);
-  }
-
-  @Post('password-reset/request')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Request password reset' })
-  requestPasswordReset(@Body('email') email: string) {
-    return this.authService.requestPasswordReset(email);
-  }
-
-  @Post('password-reset/confirm')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Confirm password reset' })
-  confirmPasswordReset(@Body() dto: any) {
-    return this.authService.confirmPasswordReset(dto.token, dto.newPassword);
   }
 
   @Get('me')

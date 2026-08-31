@@ -16,11 +16,4 @@ export class ProfileRepository extends BaseRepository<Profile> {
   async findByUserId(userId: string): Promise<Profile> {
     return this.findById(userId);
   }
-
-  async updateByUserId(
-    userId: string,
-    data: Partial<Profile>,
-  ): Promise<Profile> {
-    return this.update(userId, data);
-  }
 }

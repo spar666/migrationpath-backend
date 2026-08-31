@@ -5,6 +5,7 @@ import { PointsCalculatorService } from './points-calculator/points-calculator.s
 import { PointsAggregatorService } from './points-aggregator.service';
 import { PointsRuleService } from './points-rule.service';
 import { UserPointsService } from './user-points.service';
+import { PointsCaptureService } from './points-capture.service';
 
 describe('PointsEngineController', () => {
   let controller: PointsEngineController;
@@ -18,6 +19,7 @@ describe('PointsEngineController', () => {
         { provide: PointsAggregatorService, useValue: {} },
         { provide: PointsRuleService, useValue: {} },
         { provide: UserPointsService, useValue: {} },
+        { provide: PointsCaptureService, useValue: {} },
       ],
     }).compile();
 

@@ -1,65 +1,34 @@
-import { Controller, Get, Query, Post, Body } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiQuery,
-  ApiBody,
-  ApiConsumes,
-  ApiResponse,
-} from '@nestjs/swagger';
-import { SearchService } from './search.service';
+import { Controller, Get, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { IntentService } from './intent.service';
-import { SearchQueryDto } from './dto/search-query.dto';
-import { AdvancedSearchDto } from './dto/advanced-search.dto';
 import { IntentQueryDto } from './dto/intent-query.dto';
 
+/**
+ * Intent routing only.
+ *
+ * `GET /search`, `GET /search/occupations` and `POST /search/advanced` were
+ * removed with the courses module. All three iterated `Course` as the primary
+ * record — a "pathway" was a course row — so there was nothing left to return
+ * once the table went. None of them had a caller: the frontend searches
+ * occupations through `/occupations/search` and only ever used the route below.
+ */
 @ApiTags('search')
 @Controller('search')
 export class SearchController {
-  constructor(
-    private readonly searchService: SearchService,
-    private readonly intentService: IntentService,
-  ) {}
-
-  @Get('')
-  @ApiOperation({ summary: 'Search courses and occupations' })
-  @ApiQuery({
-    name: 'data',
-    required: false,
-    description: 'Search term (course or occupation) or "all"',
-  })
-  async searchCoursesAndOccupations(@Query('data') data: string) {
-    return this.searchService.searchCoursesAndOccupations(data);
-  }
+  constructor(private readonly intentService: IntentService) {}
 
   @Get('intent')
   @ApiOperation({
     summary:
-      'Smart query router: classify a raw query as SKILLED / STUDENT / FAMILY and return the matching funnel payload',
+      'Smart query router: classify a raw query as SKILLED / FAMILY and return the matching funnel payload',
   })
   @ApiQuery({ name: 'q', required: true, description: 'Raw user query' })
   @ApiResponse({
     status: 200,
     description:
-      'Intent classification with a stream-specific payload (split-screen visas for SKILLED, course list for STUDENT, redirect for FAMILY).',
+      'Intent classification with a stream-specific payload (split-screen visas for SKILLED, redirect for FAMILY).',
   })
   async resolveIntent(@Query() queryDto: IntentQueryDto) {
     return this.intentService.classify(queryDto.q);
-  }
-
-  @Get('occupations')
-  @ApiOperation({ summary: 'Search for universities and courses' })
-  async search(@Query() queryDto: SearchQueryDto) {
-    return this.searchService.search(queryDto);
-  }
-
-  @Post('advanced')
-  @ApiOperation({ summary: 'Advanced search with payload and filters' })
-  @ApiBody({ type: AdvancedSearchDto })
-  @ApiConsumes('application/json')
-  @ApiResponse({ status: 200, description: 'Advanced search results' })
-  async advancedSearch(@Body() body: AdvancedSearchDto & { debug?: boolean }) {
-    const { page = 1, limit = 10, debug = false } = body || {};
-    return this.searchService.searchAdvanced(body, page, limit, debug);
   }
 }

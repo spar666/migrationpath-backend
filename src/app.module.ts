@@ -17,26 +17,19 @@ import { AppCacheModule } from './common/cache/cache.module';
 import { AuthModule } from './auth/auth.module';
 import { UserProfileModule } from './user-profile/user-profile.module';
 
-import { PricingModule } from './pricing/pricing.module';
 import { LeadsModule } from './leads/leads.module';
 import { AnalyticsModule } from './analytics/analytics.module';
-import { InvitationModule } from './invitation/invitation.module';
-import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
 import { SearchModule } from './search/search.module';
 import { OccupationsModule } from './occupations/occupations.module';
 import { PointsEngineModule } from './points-engine/points-engine.module';
 import { VisaRecommendationModule } from './visa-recommendation/visa-recommendation.module';
 import { ConsultationModule } from './consultation/consultation.module';
-import { CoursesModule } from './courses/courses.module';
-import { UserProgressModule } from './user-progress/user-progress.module';
 import { CmsModule } from './cms/cms.module';
 import { MigrationRuleModule } from './migration-rules/migration-rule.module';
 import { StatsModule } from './stats/stats.module';
 import { PartnerModule } from './partner/partner.module';
-import { ParentModule } from './parent/parent.module';
 import { PolicyConfigModule } from './policy-config/policy-config.module';
-import { RegionalPostcodeModule } from './regional-postcode/regional-postcode.module';
 import { DataFreshnessModule } from './data-freshness/data-freshness.module';
 import { SiteConfigModule } from './site-config/site-config.module';
 
@@ -82,25 +75,18 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
     // --- Domain ---
     AuthModule,
     UserProfileModule,
-    PricingModule,
     LeadsModule,
     AnalyticsModule,
-    InvitationModule,
-    NotificationsModule,
     AdminModule,
     SearchModule,
     OccupationsModule,
     PointsEngineModule,
     VisaRecommendationModule,
     PartnerModule,
-    ParentModule,
     PolicyConfigModule,
-    RegionalPostcodeModule,
     DataFreshnessModule,
     SiteConfigModule,
     ConsultationModule,
-    CoursesModule,
-    UserProgressModule,
     CmsModule,
     MigrationRuleModule,
     StatsModule,

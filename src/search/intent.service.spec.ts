@@ -1,8 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { IntentService } from './intent.service';
 import { OccupationsService } from '../occupations/occupations.service';
-import { Course } from '../courses/entities/course.entity';
 
 /**
  * Search intent classification.
@@ -31,7 +29,6 @@ const OCCUPATION = {
 describe('IntentService.classify', () => {
   let service: IntentService;
   let occupations: { findOne: jest.Mock; searchOccupations: jest.Mock };
-  let courseQuery: { getMany: jest.Mock };
 
   beforeEach(async () => {
     occupations = {
@@ -39,23 +36,10 @@ describe('IntentService.classify', () => {
       searchOccupations: jest.fn().mockResolvedValue({ data: [] }),
     };
 
-    courseQuery = { getMany: jest.fn().mockResolvedValue([]) };
-    const builder = {
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockReturnThis(),
-      take: jest.fn().mockReturnThis(),
-      getMany: () => courseQuery.getMany(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         IntentService,
         { provide: OccupationsService, useValue: occupations },
-        {
-          provide: getRepositoryToken(Course),
-          useValue: { createQueryBuilder: () => builder },
-        },
       ],
     }).compile();
 
@@ -212,73 +196,17 @@ describe('IntentService.classify', () => {
       expect(result.query).toBe('software engineer');
     });
 
-    it('falls through to courses when the title match will not resolve', async () => {
+    // Previously this fell through to a STUDENT course match. With courses
+    // gone the branch below it is UNKNOWN, so an unresolvable title now ends
+    // the chain rather than being caught by a course lookup.
+    it('falls through to UNKNOWN when the title match will not resolve', async () => {
       occupations.searchOccupations.mockResolvedValue({
         data: [{ anzsco_code: '261313' }],
       });
       occupations.findOne.mockRejectedValue(new Error('gone'));
-      courseQuery.getMany.mockResolvedValue([
-        {
-          id: 'c1',
-          courseTitle: 'Master of IT',
-          universityName: 'Example University',
-          isRegional: true,
-          anzscoCode: '261313',
-          anzscoTitle: 'Software Engineer',
-        },
-      ]);
 
       const result = await service.classify('software engineer');
-      expect(result.intent).toBe('STUDENT');
-    });
-  });
-
-  describe('courses', () => {
-    it('routes a course match to STUDENT', async () => {
-      courseQuery.getMany.mockResolvedValue([
-        {
-          id: 'c1',
-          courseTitle: 'Master of Information Technology',
-          universityName: 'Example University',
-          isRegional: true,
-          anzscoCode: '261313',
-          anzscoTitle: 'Software Engineer',
-        },
-      ]);
-
-      const result = (await service.classify('master of it')) as never as {
-        intent: string;
-        courses: Array<Record<string, unknown>>;
-      };
-
-      expect(result.intent).toBe('STUDENT');
-      expect(result.courses[0]).toEqual({
-        id: 'c1',
-        courseName: 'Master of Information Technology',
-        university: 'Example University',
-        isRegional: true,
-        anzscoCode: '261313',
-        occupation: 'Software Engineer',
-      });
-    });
-
-    it('normalises missing occupation fields to null', async () => {
-      // undefined disappears through JSON, leaving the client unable to tell
-      // "no linked occupation" from "field absent".
-      courseQuery.getMany.mockResolvedValue([
-        {
-          id: 'c1',
-          courseTitle: 'Diploma',
-          universityName: 'Example',
-          isRegional: false,
-        },
-      ]);
-
-      const result = (await service.classify('diploma')) as never as {
-        courses: Array<{ anzscoCode: unknown; occupation: unknown }>;
-      };
-      expect(result.courses[0].anzscoCode).toBeNull();
-      expect(result.courses[0].occupation).toBeNull();
+      expect(result.intent).toBe('UNKNOWN');
     });
   });
 

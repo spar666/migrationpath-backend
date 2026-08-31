@@ -1,12 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
-import { UnauthorizedException, ConflictException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { User } from './entities/user.entity';
-import { Profile } from '../user-profile/entities/profile.entity';
-import { NotificationPreference } from '../notifications/entities/notification.entity';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -40,30 +38,10 @@ describe('AuthService', () => {
       verifyAsync: jest.fn(),
     };
 
-    // AuthService gained profile and notification-preference repositories when
-    // signup started seeding those rows. Without them registered here, Nest
-    // fails to resolve the constructor and every test in this file errors
-    // before it runs — which is what was happening.
-    const profileRepository = {
-      create: jest.fn((data) => data),
-      save: jest.fn(),
-      findOne: jest.fn(),
-    };
-    const preferencesRepository = {
-      create: jest.fn((data) => data),
-      save: jest.fn(),
-      findOne: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: getRepositoryToken(User), useValue: userRepository },
-        { provide: getRepositoryToken(Profile), useValue: profileRepository },
-        {
-          provide: getRepositoryToken(NotificationPreference),
-          useValue: preferencesRepository,
-        },
         { provide: JwtService, useValue: jwtService },
       ],
     }).compile();
@@ -73,40 +51,6 @@ describe('AuthService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
-  });
-
-  describe('signUp', () => {
-    it('creates a new user with a hashed password and returns a token', async () => {
-      userRepository.findOne.mockResolvedValue(null);
-      userRepository.save.mockResolvedValue({
-        ...mockUser,
-        password: 'hashed',
-      });
-
-      const result = await service.signUp({
-        email: 'jane@example.com',
-        password: 'plaintext-password',
-        fullName: 'Jane Doe',
-      });
-
-      expect(userRepository.save).toHaveBeenCalled();
-      const savedArg = userRepository.create.mock.calls[0][0];
-      expect(savedArg.password).not.toBe('plaintext-password');
-      expect(result.access_token).toBe('signed.jwt.token');
-      expect(result.user).not.toHaveProperty('password');
-    });
-
-    it('rejects signup when the email is already registered', async () => {
-      userRepository.findOne.mockResolvedValue(mockUser);
-
-      await expect(
-        service.signUp({
-          email: 'jane@example.com',
-          password: 'whatever',
-          fullName: 'Jane Doe',
-        } as any),
-      ).rejects.toBeInstanceOf(ConflictException);
-    });
   });
 
   describe('signIn', () => {

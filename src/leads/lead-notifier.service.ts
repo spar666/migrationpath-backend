@@ -7,6 +7,7 @@ import { Lead } from './entities/lead.entity';
 const SOURCE_LABELS: Record<string, string> = {
   quote_slideover: 'Header quick quote',
   quote_page: 'Quote page',
+  points_calculator: 'Points calculator',
   other: 'Other',
 };
 

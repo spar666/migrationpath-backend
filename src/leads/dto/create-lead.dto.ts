@@ -51,11 +51,23 @@ export class CreateLeadDto {
 
   @ApiPropertyOptional({
     description: 'Where the lead came from',
-    enum: ['quote_slideover', 'quote_page', 'partner_eligibility', 'other'],
+    enum: [
+      'quote_slideover',
+      'quote_page',
+      'partner_eligibility',
+      'points_calculator',
+      'other',
+    ],
     default: 'other',
   })
   @IsOptional()
-  @IsIn(['quote_slideover', 'quote_page', 'partner_eligibility', 'other'])
+  @IsIn([
+    'quote_slideover',
+    'quote_page',
+    'partner_eligibility',
+    'points_calculator',
+    'other',
+  ])
   source?: LeadSource;
 
   @ApiPropertyOptional({

@@ -9,12 +9,10 @@ import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
 import { User } from './entities/user.entity';
-import { Profile } from '../user-profile/entities/profile.entity';
-import { NotificationPreference } from '../notifications/entities/notification.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Profile, NotificationPreference]),
+    TypeOrmModule.forFeature([User]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

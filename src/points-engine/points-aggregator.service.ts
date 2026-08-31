@@ -14,6 +14,13 @@ import {
 } from './constants/points-catalogue';
 import { PolicyConfigService } from '../policy-config/policy-config.service';
 
+/**
+ * Shown with every score. The points test is legislated and changes years
+ * apart, so the date is carried as admin-editable config rather than a
+ * constant — confirming the law is a config edit, not a deploy.
+ */
+const POINTS_DISCLAIMER = 'General information only, not migration advice.';
+
 @Injectable()
 export class PointsAggregatorService {
   constructor(
@@ -42,6 +49,7 @@ export class PointsAggregatorService {
       'points.gsmPassMark',
       GSM_PASS_MARK,
     );
+    const currentAsOf = await this.policyConfig.latestEffectiveDate('points');
 
     const rangePoints = (category: PointsCategory, value: number): number => {
       const rule = rules.find(
@@ -119,6 +127,8 @@ export class PointsAggregatorService {
       workCapApplied,
       belowPassMark: totalPoints < passMark,
       ineligibilityReason,
+      currentAsOf,
+      disclaimer: POINTS_DISCLAIMER,
     };
   }
 }

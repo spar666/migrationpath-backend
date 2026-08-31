@@ -85,6 +85,15 @@ export class UserPointsService {
     };
   }
 
+  /**
+   * Points ranges for the points-tested subclasses only.
+   *
+   * 188 (Business Innovation & Investment) was listed here and has been
+   * removed: it closed to new applications in July 2024, and it was never
+   * points-tested on this scale in the first place — quoting a 65-point
+   * minimum for it invited leads toward a programme that cannot be applied
+   * for. Only currently-open programmes belong in this list.
+   */
   async getEligibilityRanges(): Promise<
     {
       visaType: string;
@@ -111,12 +120,6 @@ export class UserPointsService {
         minimumPoints: 65,
         averagePoints: 75,
         percentilePoints: { p50: 70, p75: 80, p90: 90 },
-      },
-      {
-        visaType: '188',
-        minimumPoints: 65,
-        averagePoints: 80,
-        percentilePoints: { p50: 75, p75: 85, p90: 95 },
       },
     ];
   }

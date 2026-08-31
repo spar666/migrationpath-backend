@@ -4,6 +4,7 @@ import {
   Body,
   Get,
   Patch,
+  Delete,
   Param,
   UseGuards,
   Query,
@@ -12,14 +13,21 @@ import {
 import { PointsEngineService } from './points-engine.service';
 import { PointsCalculatorService } from './points-calculator/points-calculator.service';
 import { PointsAggregatorService } from './points-aggregator.service';
+import { PointsCaptureService } from './points-capture.service';
 import { PointsInputDto, BusinessPointsInputDto } from './dto/points.dto';
 import { UserProfileDto } from './dto/user-profile.dto';
+import { CaptureCalculatorLeadDto } from './dto/capture-lead.dto';
 import { SavePointsDto, CompareScenariosDto } from './dto/save-points.dto';
+import {
+  CreatePointsConfigDto,
+  UpdatePointsConfigDto,
+} from './dto/update-points-config.dto';
 import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
   ApiQuery,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -39,6 +47,7 @@ export class PointsEngineController {
     private readonly aggregator: PointsAggregatorService,
     private readonly pointsRuleService: PointsRuleService,
     private readonly userPointsService: UserPointsService,
+    private readonly captureService: PointsCaptureService,
   ) {}
 
   @Post('calculate')
@@ -54,6 +63,27 @@ export class PointsEngineController {
   })
   calculateTotal(@Body() profile: UserProfileDto) {
     return this.aggregator.calculateTotalPoints(profile);
+  }
+
+  @Post('capture')
+  @ApiOperation({
+    summary:
+      'Capture contact details at the end of the calculator and open a prospect (public)',
+    description:
+      'The score itself is never gated — POST /points/calculate/total is public and ' +
+      'anonymous. This is the step after it: the visitor gives their details to find ' +
+      'out what the number means, and lands on the same funnel spine the other ' +
+      'entry points use. The score is recomputed here from the submitted inputs.',
+  })
+  @ApiResponse({
+    status: 201,
+    description:
+      'The recomputed score, per-subclass standing for 189/190/491, and the ' +
+      'prospect reference the booking CTA needs. `can_book` is false if the ' +
+      'prospect could not be written.',
+  })
+  capture(@Body() dto: CaptureCalculatorLeadDto) {
+    return this.captureService.capture(dto);
   }
 
   @Post('calculate/business')
@@ -74,7 +104,10 @@ export class PointsEngineController {
   }
 
   @Get('config')
-  @ApiOperation({ summary: 'Get all active points configuration (public)' })
+  @ApiOperation({
+    summary:
+      'Get all active points rules — the values the calculator scores against (public)',
+  })
   getConfig() {
     return this.pointsEngineService.findAllConfig();
   }
@@ -84,8 +117,29 @@ export class PointsEngineController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Update points configuration (admin only)' })
-  updateConfig(@Param('id') id: string, @Body() dto: any) {
+  updateConfig(
+    @Param('id') id: string,
+    @Body() dto: UpdatePointsConfigDto,
+  ) {
     return this.pointsEngineService.updateConfig(id, dto);
+  }
+
+  @Post('config')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({ summary: 'Create a points rule (admin only)' })
+  createConfig(@Body() dto: CreatePointsConfigDto) {
+    return this.pointsEngineService.createConfig(dto);
+  }
+
+  @Delete('config/:id')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({ summary: 'Delete a points rule (admin only)' })
+  removeConfig(@Param('id') id: string) {
+    return this.pointsEngineService.removeConfig(id);
   }
 
   @Post('save')

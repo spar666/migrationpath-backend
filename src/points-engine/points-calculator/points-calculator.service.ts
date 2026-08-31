@@ -5,14 +5,12 @@ import {
   BusinessPointsInputDto,
   VisaGroup,
 } from '../dto/points.dto';
-import { PointsConfigRepository } from '../points-config.repository';
 import { PointsRuleRepository } from '../points-rule.repository';
 import { PointsRule } from '../entities/points-rule.entity';
 
 @Injectable()
 export class PointsCalculatorService {
   constructor(
-    private readonly configRepo: PointsConfigRepository,
     private readonly ruleRepo: PointsRuleRepository,
   ) {}
 

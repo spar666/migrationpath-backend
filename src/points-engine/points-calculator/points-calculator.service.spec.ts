@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PointsCalculatorService } from './points-calculator.service';
-import { PointsConfigRepository } from '../points-config.repository';
 import { PointsRuleRepository } from '../points-rule.repository';
 
 describe('PointsCalculatorService', () => {
@@ -72,7 +71,6 @@ describe('PointsCalculatorService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PointsCalculatorService,
-        { provide: PointsConfigRepository, useValue: mockConfigRepo },
         { provide: PointsRuleRepository, useValue: mockRuleRepo },
       ],
     }).compile();
