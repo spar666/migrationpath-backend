@@ -1,3 +1,4 @@
+import { DEFAULT_VISA_CATEGORIES } from './visa-categories';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,6 +7,7 @@ import { UpdateSiteConfigDto } from './dto/update-site-config.dto';
 
 /** Default site configuration — matches the frontend SiteConfigEditor defaults. */
 const DEFAULT_CONFIG: Record<string, any> = {
+  visaCategories: DEFAULT_VISA_CATEGORIES,
   home: {
     heroHeadline: 'Your Pathway to Australian Migration',
     heroSubtext:
@@ -106,7 +108,7 @@ export class SiteConfigService {
   async getConfig(): Promise<Record<string, any>> {
     const row = await this.repo.findOne({ where: { configKey: CONFIG_KEY } });
     if (row) {
-      return row.configData;
+      return { visaCategories: DEFAULT_VISA_CATEGORIES, ...row.configData };
     }
     this.logger.log('No site_config row found — returning built-in defaults');
     return DEFAULT_CONFIG;
@@ -123,12 +125,21 @@ export class SiteConfigService {
     let row = await this.repo.findOne({ where: { configKey: CONFIG_KEY } });
 
     if (row) {
-      row.configData = dto as any;
+      row.configData = {
+        ...dto,
+        visaCategories:
+          dto.visaCategories ??
+          row.configData.visaCategories ??
+          DEFAULT_VISA_CATEGORIES,
+      };
       row.updatedBy = userId ?? null;
     } else {
       row = this.repo.create({
         configKey: CONFIG_KEY,
-        configData: dto as any,
+        configData: {
+          ...dto,
+          visaCategories: dto.visaCategories ?? DEFAULT_VISA_CATEGORIES,
+        },
         updatedBy: userId ?? null,
       });
     }

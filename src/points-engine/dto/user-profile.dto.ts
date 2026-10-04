@@ -1,4 +1,5 @@
 import {
+  IsIn,
   IsInt,
   IsOptional,
   IsBoolean,
@@ -19,7 +20,7 @@ export class UserProfileDto {
     description: 'Visa group',
     default: DEFAULT_VISA_GROUP,
   })
-  @IsString()
+  @IsIn(['GSM'])
   @IsOptional()
   visaGroup?: string = DEFAULT_VISA_GROUP;
 
@@ -67,6 +68,26 @@ export class UserProfileDto {
   @IsBoolean()
   @IsOptional()
   regionalStudy?: boolean;
+  @IsOptional()
+  @IsBoolean()
+  australianStudy?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  specialistEducation?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  professionalYear?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  communityLanguage?: boolean;
+
+  @IsOptional()
+  @IsIn(['single_spouse', 'skills_english', 'english_only', 'none'])
+  partnerSkills?: string;
+
 }
 
 export class StructuredPointsResultDto {

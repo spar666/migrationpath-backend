@@ -125,7 +125,7 @@ describe('IntentService.classify', () => {
       expect(result.occupation).toEqual({
         anzscoCode: '261313',
         title: 'Software Engineer',
-        primaryList: 'MLTSSL',
+        lists: [],
         assessingAuthority: 'ACS',
       });
     });

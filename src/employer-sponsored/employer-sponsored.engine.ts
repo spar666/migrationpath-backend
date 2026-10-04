@@ -1,10 +1,9 @@
+import { PolicyConfigService } from '../policy-config/policy-config.service';
+import { CommercialConfigService } from '../commercial-config/commercial-config.module';
 import { Injectable, Logger } from '@nestjs/common';
 import {
   CONSIDERED_SUBCLASSES,
-  MARKET_RATE_WARNING_MARGIN,
   OccupationListCheck,
-  SPONSOR_RULES,
-  SUBCLASS_RULES,
   SubclassRule,
   computeClientFit,
 } from './constants/employer-sponsored.config';
@@ -26,6 +25,9 @@ export interface ApplicantFacts {
   has_skills_assessment?: boolean | null;
   onshore?: boolean | null;
   current_visa?: string;
+  sponsored_work_years?: number;
+  requests_exemption?: boolean;
+  labour_agreement?: boolean;
   has_health_or_character_concern?: boolean | null;
   preferred_subclass?: string;
 }
@@ -71,6 +73,7 @@ export interface NominationFacts {
 
 export interface SubclassAssessment {
   subclass: string;
+  gap_codes: string[];
   label: string;
   eligible: boolean;
   /** Everything the agent should follow up — advisory and blocking alike. */
@@ -94,6 +97,13 @@ export interface SubclassAssessment {
 }
 
 export interface EligibilityResult {
+  best_fit_pathway?: string;
+  outcome_tag: string;
+  gap_codes: string[];
+  /** Professional/legal questions the rules engine must not adjudicate. */
+  rma_review_flags: string[];
+  /** Declared operational risks, distinct from eligibility and client fit. */
+  risk_flags: string[];
   /** Does the strongest available pathway clear the statutory tests? */
   statutory_eligible: boolean;
   /** Is this someone the practice wants to take on? Commercial, not legal. */
@@ -125,7 +135,7 @@ export interface EligibilityResult {
  * in a way that could change an outcome — it is the only way to know which
  * prospects were screened under which rules.
  */
-export const ENGINE_VERSION = '0.1.0-placeholder-rules';
+export const ENGINE_VERSION = '1.0.0-stream-policy';
 
 /**
  * Runs the employer-sponsored pre-screen.
@@ -141,6 +151,8 @@ export const ENGINE_VERSION = '0.1.0-placeholder-rules';
  */
 @Injectable()
 export class EmployerSponsoredEngine {
+  constructor(private readonly policy: PolicyConfigService, private readonly commercial: CommercialConfigService) {}
+
   private readonly logger = new Logger(EmployerSponsoredEngine.name);
 
   /**
@@ -168,27 +180,41 @@ export class EmployerSponsoredEngine {
       ? this.assessSponsor(input.sponsor)
       : [];
 
-    // Only assess the subclass the prospect asked about, if they named one;
-    // otherwise try each in preference order.
-    const candidates = nomination.subclass
-      ? [nomination.subclass]
-      : applicant.preferred_subclass
-        ? [applicant.preferred_subclass, ...CONSIDERED_SUBCLASSES]
-        : CONSIDERED_SUBCLASSES;
-
-    const seen = new Set<string>();
+    const [policy, commercial] = await Promise.all([this.policy.employerSnapshot(), this.commercial.snapshot()]);
     const assessments: SubclassAssessment[] = [];
-    for (const subclass of candidates) {
-      if (seen.has(subclass)) continue;
-      seen.add(subclass);
-      const rule = SUBCLASS_RULES[subclass];
-      if (!rule) {
-        this.logger.warn(`Unknown subclass requested: ${subclass}`);
+    // Preferences never remove evaluation branches.
+    for (const pathway of CONSIDERED_SUBCLASSES) {
+      const core = pathway.startsWith('482');
+      const trt = pathway === '186-trt';
+      const keys = {
+        maxAge: core ? null : 'employer.maxAge',
+        minYearsExperience: trt ? 'employer.trtMinSponsoredYears' : core ? 'employer.coreMinExperienceYears' : pathway === '494-es' ? 'employer.regionalMinExperienceYears' : 'employer.deMinExperienceYears',
+        minSalary: pathway === '482-specialist' ? 'employer.specialistIncome' : 'employer.coreSkillsIncome',
+        minEnglishOverall: `employer.${pathway}.englishOverall`,
+        minEnglishPerBand: `employer.${pathway}.englishPerBand`,
+      };
+      const missing = Object.values(keys).filter((key): key is string => key !== null && !policy.has(key));
+      if (missing.length) {
+        assessments.push({ subclass: pathway, label: pathway, eligible: false,
+          gap_codes: ['policy_unverified'], blockers: [], passes: [],
+          unknowns: [`RMA verification required: ${missing.join(', ')}`],
+          undetermined: ['RMA verification of policy settings is required.'],
+          permanentResidence: pathway.startsWith('186') ? 'direct' : 'pathway' });
         continue;
       }
-      assessments.push(
-        await this.assessSubclass(subclass, rule, applicant, nomination),
-      );
+      const rule: SubclassRule = {
+        label: pathway,
+        maxAge: keys.maxAge ? policy.get(keys.maxAge) ?? null : null,
+        minYearsExperience: policy.get(keys.minYearsExperience) ?? Infinity,
+        minSalary: policy.get(keys.minSalary) ?? Infinity,
+        minEnglishOverall: policy.get(keys.minEnglishOverall) ?? Infinity,
+        minEnglishPerBand: policy.get(keys.minEnglishPerBand) ?? Infinity,
+        requiresRegional: pathway === '494-es', requiresLmt: core || pathway === '494-es',
+        occupationLists: pathway === '482-core' || pathway === '186-de' ? ['CSOL'] : pathway === '494-es' ? ['MLTSSL', 'ROL'] : [],
+        permanentResidence: pathway.startsWith('186') ? 'direct' : 'pathway',
+      };
+      const assessment = await this.assessSubclass(pathway, rule, applicant, nomination);
+      assessments.push(assessment);
     }
 
     // Prefer an eligible subclass; among those, prefer direct PR.
@@ -200,6 +226,7 @@ export class EmployerSponsoredEngine {
       // screen can say what is missing rather than just "no".
       [...assessments].sort(
         (a, b) =>
+          Number(a.gap_codes.includes('policy_unverified')) - Number(b.gap_codes.includes('policy_unverified')) ||
           a.blockers.length - b.blockers.length ||
           a.undetermined.length - b.undetermined.length,
       )[0];
@@ -219,7 +246,7 @@ export class EmployerSponsoredEngine {
       subclass: best?.subclass,
       hasAbn: !!input.sponsor?.abn,
       statutoryEligible: statutoryEligible && !sponsorBlocking,
-    });
+    }, commercial);
 
     const reasons: string[] = [];
     const blockers: string[] = [];
@@ -270,12 +297,49 @@ export class EmployerSponsoredEngine {
 
     reasons.push(...fit.reasons);
 
+    const gapCodes = dedupe(best?.gap_codes ?? []);
+    if (sponsorBlocking || applicant.requests_exemption || applicant.labour_agreement) gapCodes.push('professional_review');
+    const rmaReviewFlags = dedupe([
+      ...(gapCodes.includes('policy_unverified') ? ['policy_verification'] : []),
+      ...(applicant.requests_exemption ? ['possible_exemption'] : []),
+      ...(applicant.labour_agreement ? ['labour_agreement'] : []),
+      ...(applicant.has_skills_assessment != null ? ['skills_assessment_validity'] : []),
+      ...(nomination.annual_salary != null ? ['amsr', 'genuine_position'] : []),
+      ...(nomination.lmt_completed != null ? ['lmt_adequacy'] : []),
+      ...(applicant.has_health_or_character_concern != null
+        ? ['health_character']
+        : []),
+    ]);
+    const riskFlags = dedupe([
+      ...(applicant.has_health_or_character_concern === true
+        ? ['health_character_concern']
+        : []),
+      ...(input.sponsor?.has_adverse_information === true
+        ? ['sponsor_adverse_information']
+        : []),
+      ...(input.sponsor?.meets_training_obligations === false
+        ? ['sponsor_training_obligations']
+        : []),
+      ...(input.sponsor?.sponsorship_status === 'refused'
+        ? ['previous_sponsorship_refusal']
+        : []),
+    ]);
+    const outcomeTag = gapCodes.includes('policy_unverified') ? 'review_required'
+      : gapCodes.includes('professional_review') ? 'review_required'
+      : statutoryEligible && !sponsorBlocking ? 'may_be_eligible'
+      : best?.undetermined.length ? 'incomplete'
+      : gapCodes.length === 1 && gapCodes[0] === 'income_short' ? 'income_below_threshold' : 'requirements_not_met';
     return {
+      best_fit_pathway: best?.subclass,
+      outcome_tag: outcomeTag,
+      gap_codes: dedupe(gapCodes),
+      rma_review_flags: rmaReviewFlags,
+      risk_flags: riskFlags,
       statutory_eligible: statutoryEligible && !sponsorBlocking,
       client_fit: fit.fit,
       recommended_subclass: best?.eligible ? best.subclass : undefined,
       recommended_label: best?.eligible ? best.label : undefined,
-      reasons: dedupe(reasons),
+      reasons: dedupe([...reasons, 'You may be eligible based on this indicative pre-screen. A registered migration agent must confirm the requirements.'].filter((r, i) => i < reasons.length || statutoryEligible && !sponsorBlocking)),
       blockers: dedupe([...blockers, ...sponsorFindings.filter(isNegative)]),
       open_questions: dedupe(openQuestions),
       assessments,
@@ -294,6 +358,7 @@ export class EmployerSponsoredEngine {
     nomination: NominationFacts,
   ): Promise<SubclassAssessment> {
     const blockers: string[] = [];
+    const gap_codes: string[] = [];
     const unknowns: string[] = [];
     const passes: string[] = [];
 
@@ -310,7 +375,8 @@ export class EmployerSponsoredEngine {
     if (rule.maxAge !== null) {
       if (applicant.age == null) {
         cannotDetermine('Age was not provided.');
-      } else if (applicant.age > rule.maxAge) {
+      } else if (applicant.age >= rule.maxAge) {
+        gap_codes.push('age_limit');
         blockers.push(
           `${rule.label} has an age limit of ${rule.maxAge}; the applicant is ${applicant.age}.`,
         );
@@ -319,13 +385,25 @@ export class EmployerSponsoredEngine {
       }
     }
 
+    if (applicant.requests_exemption || applicant.labour_agreement) {
+      cannotDetermine('An exemption or Labour Agreement requires professional review.');
+      gap_codes.push('professional_review');
+    }
+    if (subclass === '186-trt') {
+      if (!applicant.current_visa) cannotDetermine('Current 457/482 visa status was not provided.');
+      else if (!['457', '482'].includes(applicant.current_visa)) {
+        blockers.push('TRT requires review of the current qualifying visa.'); gap_codes.push('qualifying_visa_missing');
+      }
+    }
+    const experience = subclass === '186-trt' ? applicant.sponsored_work_years : applicant.years_experience;
     // --- Experience ---
-    if (applicant.years_experience == null) {
+    if (experience == null) {
       cannotDetermine('Years of relevant work experience were not provided.');
-    } else if (applicant.years_experience < rule.minYearsExperience) {
+    } else if (experience < rule.minYearsExperience) {
+      gap_codes.push(subclass === '186-trt' ? 'sponsored_work_short' : 'experience_short');
       blockers.push(
         `${rule.label} requires at least ${rule.minYearsExperience} year(s) of ` +
-          `relevant experience; ${applicant.years_experience} was given.`,
+          `relevant experience; ${experience} was given.`,
       );
     } else {
       passes.push('Meets the minimum work experience requirement.');
@@ -333,7 +411,7 @@ export class EmployerSponsoredEngine {
 
     // --- English ---
     if (
-      applicant.english_overall == null &&
+      applicant.english_overall == null ||
       applicant.english_lowest_band == null
     ) {
       cannotDetermine('English test results were not provided.');
@@ -342,6 +420,7 @@ export class EmployerSponsoredEngine {
         applicant.english_overall != null &&
         applicant.english_overall < rule.minEnglishOverall
       ) {
+        gap_codes.push('english_short');
         blockers.push(
           `${rule.label} requires an overall English score of at least ` +
             `${rule.minEnglishOverall} (IELTS-equivalent).`,
@@ -351,6 +430,7 @@ export class EmployerSponsoredEngine {
         applicant.english_lowest_band != null &&
         applicant.english_lowest_band < rule.minEnglishPerBand
       ) {
+        gap_codes.push('english_short');
         blockers.push(
           `${rule.label} requires at least ${rule.minEnglishPerBand} in every ` +
             `component (IELTS-equivalent).`,
@@ -364,45 +444,32 @@ export class EmployerSponsoredEngine {
       }
     }
 
-    // --- Occupation on the relevant list ---
-    const listed = await this.checkOccupationListed(
-      applicant.occupation_code ?? nomination.occupation_code,
-      rule.occupationLists,
-      applicant.occupation_listed,
-    );
-    if (listed == null) {
-      cannotDetermine(
-        'Whether the nominated occupation appears on the relevant skilled ' +
-          'occupation list has not been confirmed.',
-      );
-    } else if (listed === false) {
-      blockers.push(
-        `The nominated occupation does not appear on the list(s) required for ` +
-          `${rule.label}.`,
-      );
-    } else {
-      passes.push('The nominated occupation appears on the required list.');
+    // Specialist uses ANZSCO major groups; TRT has no CSOL gate.
+    const code = applicant.occupation_code ?? nomination.occupation_code;
+    if (subclass === '482-specialist') {
+      if (!code || !/^\d{6}$/.test(code)) cannotDetermine('A valid ANZSCO code is required.');
+      else if (!['1', '2', '4', '5', '6'].includes(code[0])) {
+        blockers.push('The ANZSCO major group is outside the Specialist stream.'); gap_codes.push('occupation_group_excluded');
+      }
+    } else if (rule.occupationLists.length) {
+      const listed = await this.checkOccupationListed(code, rule.occupationLists, applicant.occupation_listed);
+      if (listed == null) cannotDetermine('Occupation membership has not been confirmed from the official dataset.');
+      else if (!listed) { blockers.push('The occupation is outside the required lists.'); gap_codes.push('occupation_not_listed'); }
+      else passes.push('The occupation appears on a required list.');
     }
 
     // --- Salary ---
     if (nomination.annual_salary == null) {
       cannotDetermine('The nominated annual salary was not provided.');
     } else if (nomination.annual_salary < rule.minSalary) {
+      gap_codes.push('income_short');
       blockers.push(
         `The nominated salary of $${fmt(nomination.annual_salary)} is below the ` +
           `$${fmt(rule.minSalary)} income threshold for ${rule.label}.`,
       );
     } else {
       passes.push('The nominated salary clears the income threshold.');
-      if (
-        nomination.annual_salary <
-        rule.minSalary / MARKET_RATE_WARNING_MARGIN
-      ) {
-        unknowns.push(
-          'The salary clears the statutory floor but sits close to it — the ' +
-            'market salary rate test will need evidence.',
-        );
-      }
+      unknowns.push('Annual market salary rate and genuine-position evidence require RMA review.');
     }
 
     // --- Regional ---
@@ -412,6 +479,7 @@ export class EmployerSponsoredEngine {
           'Whether the work location is regional was not confirmed.',
         );
       } else if (!nomination.is_regional) {
+        gap_codes.push('regional_location_required');
         blockers.push(
           `${rule.label} requires the position to be in a designated regional area.`,
         );
@@ -435,6 +503,7 @@ export class EmployerSponsoredEngine {
       }
     }
 
+    unknowns.push('Skills-assessment validity, exemptions, occupation caveats, health and character require RMA review.');
     // --- Skills assessment ---
     if (applicant.has_skills_assessment === false) {
       unknowns.push(
@@ -445,6 +514,7 @@ export class EmployerSponsoredEngine {
 
     return {
       subclass,
+      gap_codes: dedupe(gap_codes),
       label: rule.label,
       // Nothing failed AND nothing was left undecided. Both halves matter.
       eligible: blockers.length === 0 && undetermined.length === 0,
@@ -477,7 +547,7 @@ export class EmployerSponsoredEngine {
         return null;
       }
     }
-    return declared ?? null;
+    return null;
   }
 
   private assessSponsor(sponsor: SponsorFacts): string[] {
@@ -487,27 +557,7 @@ export class EmployerSponsoredEngine {
       findings.push('No ABN was provided for the sponsoring business.');
     }
 
-    if (sponsor.years_trading == null) {
-      findings.push('How long the business has been trading was not provided.');
-    } else if (
-      sponsor.years_trading < SPONSOR_RULES.minYearsTradingForStandard
-    ) {
-      findings.push(
-        `The business has been trading for under ` +
-          `${SPONSOR_RULES.minYearsTradingForStandard} year(s), which limits the ` +
-          `sponsorship options available to it.`,
-      );
-    }
-
-    if (
-      sponsor.employee_count != null &&
-      sponsor.employee_count < SPONSOR_RULES.smallBusinessHeadcount
-    ) {
-      findings.push(
-        'Small headcount — expect closer scrutiny of whether the nominated ' +
-          'position is genuine and full-time.',
-      );
-    }
+    findings.push('Business viability, genuine position and sponsorship obligations require RMA review.');
 
     if (sponsor.has_adverse_information === true) {
       findings.push(

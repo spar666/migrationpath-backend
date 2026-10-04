@@ -87,6 +87,30 @@ export class Prospect {
   @Column({ type: 'boolean', nullable: true })
   client_fit?: boolean | null;
 
+  @Column({ nullable: true })
+  best_fit_pathway?: string;
+
+  @Column({ nullable: true })
+  outcome_tag?: string;
+
+  @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+  gap_codes: string[];
+
+  /** Questions that require professional migration-law judgment. */
+  @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+  rma_review_flags: string[];
+
+  /** Operational risk indicators, kept separate from legal review flags. */
+  @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+  risk_flags: string[];
+
+  /** Marketing/referral context captured at the point of entry. */
+  @Column({ type: 'jsonb', nullable: true })
+  attribution?: Record<string, unknown>;
+
+  @Column({ type: 'jsonb', nullable: true })
+  captured_answers?: Record<string, unknown>;
+
   /** Which surface produced this record ('pre_screen', 'points_calculator', …). */
   @Column({ length: 48, default: 'unknown' })
   source: string;

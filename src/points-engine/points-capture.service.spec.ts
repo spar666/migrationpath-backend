@@ -4,7 +4,6 @@ import { PointsCaptureService } from './points-capture.service';
 import { PointsAggregatorService } from './points-aggregator.service';
 import { ProspectService } from '../prospect/prospect.service';
 import { ProspectSummaryService } from '../prospect/prospect-summary.service';
-import { LeadsService } from '../leads/leads.service';
 import { PolicyConfigService } from '../policy-config/policy-config.service';
 
 const PROFILE = {
@@ -21,7 +20,6 @@ describe('PointsCaptureService', () => {
   let aggregator: { calculateTotalPoints: jest.Mock };
   let prospects: { create: jest.Mock };
   let summaries: { refresh: jest.Mock };
-  let leads: { create: jest.Mock };
 
   const scoreOf = (totalPoints: number) => ({
     totalPoints,
@@ -42,16 +40,16 @@ describe('PointsCaptureService', () => {
         .mockResolvedValue({ id: 'p-1', human_ref: 'MP-ABC123' }),
     };
     summaries = { refresh: jest.fn().mockResolvedValue(undefined) };
-    leads = { create: jest.fn().mockResolvedValue({ id: 'l-1' }) };
 
     const policy = {
-      getNumber: jest.fn((key: string, fallback: number) =>
+      getRequiredNumber: jest.fn((key: string) =>
         Promise.resolve(
           {
             'points.gsmPassMark': 65,
             'points.stateNominationBonus': 5,
             'points.regionalNominationBonus': 15,
-          }[key] ?? fallback,
+            'points.gsmMaxAge': 45,
+          }[key],
         ),
       ),
     };
@@ -62,7 +60,6 @@ describe('PointsCaptureService', () => {
         { provide: PointsAggregatorService, useValue: aggregator },
         { provide: ProspectService, useValue: prospects },
         { provide: ProspectSummaryService, useValue: summaries },
-        { provide: LeadsService, useValue: leads },
         { provide: PolicyConfigService, useValue: policy },
       ],
     }).compile();
@@ -76,6 +73,7 @@ describe('PointsCaptureService', () => {
       email: 'jane@example.com',
       profile: PROFILE,
       consent_given: true,
+      consent_text: 'I consent to collection of these answers.',
       ...over,
     } as any);
 
@@ -84,7 +82,6 @@ describe('PointsCaptureService', () => {
       BadRequestException,
     );
     expect(prospects.create).not.toHaveBeenCalled();
-    expect(leads.create).not.toHaveBeenCalled();
   });
 
   /**
@@ -109,12 +106,10 @@ describe('PointsCaptureService', () => {
         consent_given: true,
       }),
     );
-    expect(leads.create).toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'points_calculator' }),
-    );
+    expect(prospects.create).toHaveBeenCalledTimes(1);
     expect(result.prospect_id).toBe('p-1');
     expect(result.human_ref).toBe('MP-ABC123');
-    expect(result.can_book).toBe(true);
+    expect(result.can_book).toBe(false);
   });
 
   it('stores the inputs and the breakdown for the agent, not just a total', async () => {
@@ -189,9 +184,8 @@ describe('PointsCaptureService', () => {
     expect(result.prospect_id).toBeNull();
   });
 
-  it('does not fail the capture when the lead notification fails', async () => {
-    leads.create.mockRejectedValue(new Error('smtp down'));
-    const result = await capture();
-    expect(result.can_book).toBe(true);
+  it('rejects empty collection-notice text', async () => {
+    await expect(capture({ consent_text: ' ' })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prospects.create).not.toHaveBeenCalled();
   });
 });

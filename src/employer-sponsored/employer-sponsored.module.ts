@@ -1,3 +1,5 @@
+import { PolicyConfigModule } from '../policy-config/policy-config.module';
+import { CommercialConfigModule } from '../commercial-config/commercial-config.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Sponsor } from './entities/sponsor.entity';
@@ -15,7 +17,7 @@ import { EmployerSponsoredEngine } from './employer-sponsored.engine';
  * plain fact objects, not prospect rows.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Sponsor, Nomination])],
+  imports: [PolicyConfigModule, CommercialConfigModule, TypeOrmModule.forFeature([Sponsor, Nomination])],
   providers: [SponsorRepository, NominationRepository, EmployerSponsoredEngine],
   exports: [
     SponsorRepository,

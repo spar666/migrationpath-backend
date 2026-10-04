@@ -1,7 +1,9 @@
+import { Matches } from 'class-validator';
 import {
   IsBoolean,
   IsEmail,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -57,7 +59,12 @@ export class CaptureCalculatorLeadDto {
   @ApiPropertyOptional({
     description: 'The exact collection notice text the person was shown',
   })
-  @IsOptional()
   @IsString()
-  consent_text?: string;
+  @Matches(/\S/)
+  consent_text: string;
+
+  @ApiPropertyOptional({ description: 'Marketing and referral attribution' })
+  @IsOptional()
+  @IsObject()
+  attribution?: Record<string, any>;
 }

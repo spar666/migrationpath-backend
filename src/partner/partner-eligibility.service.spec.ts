@@ -4,7 +4,6 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { PartnerEligibilityService } from './partner-eligibility.service';
 import { PartnerEligibilitySubmission } from './entities/partner-eligibility-submission.entity';
 import { PartnerEligibilityEngine } from './partner-eligibility.engine';
-import { LeadsService } from '../leads/leads.service';
 import { ProspectService } from '../prospect/prospect.service';
 import { ProspectSummaryService } from '../prospect/prospect-summary.service';
 import { PartnerEligibilityDto } from './dto/partner-eligibility.dto';
@@ -34,7 +33,6 @@ describe('PartnerEligibilityService.submit', () => {
   let service: PartnerEligibilityService;
   let submissions: { create: jest.Mock; save: jest.Mock };
   let engine: { assess: jest.Mock };
-  let leads: { create: jest.Mock };
   let prospects: { create: jest.Mock };
   let summary: { refresh: jest.Mock };
 
@@ -57,7 +55,6 @@ describe('PartnerEligibilityService.submit', () => {
       }),
     };
     engine = { assess: jest.fn().mockReturnValue(verdict('eligible')) };
-    leads = { create: jest.fn().mockResolvedValue({}) };
     prospects = {
       create: jest
         .fn()
@@ -73,7 +70,6 @@ describe('PartnerEligibilityService.submit', () => {
           useValue: submissions,
         },
         { provide: PartnerEligibilityEngine, useValue: engine },
-        { provide: LeadsService, useValue: leads },
         { provide: ProspectService, useValue: prospects },
         { provide: ProspectSummaryService, useValue: summary },
       ],
@@ -147,10 +143,10 @@ describe('PartnerEligibilityService.submit', () => {
   });
 
   describe('what the client is told', () => {
-    it('offers booking to an eligible couple', async () => {
+    it('withholds booking until client fit has been reviewed', async () => {
       const result = await service.submit(DTO);
 
-      expect(result.can_book).toBe(true);
+      expect(result.can_book).toBe(false);
       expect(result.prospect_id).toBe('prs-1');
       expect(result.human_ref).toBe('MP-7F3K9A');
     });
@@ -164,13 +160,13 @@ describe('PartnerEligibilityService.submit', () => {
       expect(result.can_book).toBe(false);
     });
 
-    it('still offers booking for a complex case', async () => {
+    it('withholds booking for an unreviewed complex case', async () => {
       // high_effort means billable but messy. Turning this cohort away turns
       // paying clients away.
       engine.assess.mockReturnValue(verdict('high_effort'));
 
       const result = await service.submit(DTO);
-      expect(result.can_book).toBe(true);
+      expect(result.can_book).toBe(false);
     });
   });
 
@@ -194,14 +190,8 @@ describe('PartnerEligibilityService.submit', () => {
     });
   });
 
-  describe('lead capture', () => {
-    it('never fails the quiz response', async () => {
-      // Notifications are best-effort. The verdict is not.
-      leads.create.mockRejectedValue(new Error('smtp down'));
-
-      await expect(service.submit(DTO)).resolves.toMatchObject({
-        outcome: 'eligible',
-      });
-    });
+  it('creates exactly one prospect for the submission', async () => {
+    await service.submit(DTO);
+    expect(prospects.create).toHaveBeenCalledTimes(1);
   });
 });

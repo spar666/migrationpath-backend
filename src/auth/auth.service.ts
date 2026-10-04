@@ -32,7 +32,7 @@ export class AuthService {
       where: { email: dto.email },
     });
 
-    if (!user) {
+    if (!user || user.role !== 'admin') {
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -66,7 +66,7 @@ export class AuthService {
         where: { id: payload.sub },
       });
 
-      if (!user) {
+      if (!user || user.role !== 'admin') {
         throw new UnauthorizedException('User not found');
       }
 
@@ -89,7 +89,7 @@ export class AuthService {
       const user = await this.userRepository.findOne({
         where: { id: payload.sub },
       });
-      if (!user) {
+      if (!user || user.role !== 'admin') {
         throw new UnauthorizedException('User not found');
       }
       const newPayload = { sub: user.id, email: user.email, role: user.role };

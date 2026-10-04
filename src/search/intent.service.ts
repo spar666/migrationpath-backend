@@ -12,7 +12,7 @@ export interface SkilledIntentResult {
   occupation: {
     anzscoCode: string;
     title: string;
-    primaryList: string | null;
+    lists: string[];
     assessingAuthority: string | null;
   };
   /** Split-screen: both streams are always returned (either may be empty). */
@@ -174,7 +174,7 @@ export class IntentService {
         occupation: {
           anzscoCode: occupation.anzsco_code,
           title: occupation.occupation_name,
-          primaryList: occupation.primary_list,
+          lists: occupation.listMemberships?.map(m => m.list_code) ?? [],
           assessingAuthority: occupation.assessing_authority,
         },
         pointsTested,

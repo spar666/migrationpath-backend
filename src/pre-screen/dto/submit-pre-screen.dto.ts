@@ -111,6 +111,20 @@ export class PreScreenApplicantDto {
   current_visa?: string;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(60)
+  sponsored_work_years?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  requests_exemption?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  labour_agreement?: boolean;
+
+  @IsOptional()
   @IsBoolean()
   has_health_or_character_concern?: boolean;
 
@@ -346,4 +360,8 @@ export class SubmitPreScreenDto {
   @IsString()
   @MaxLength(48)
   source?: string;
+
+  @IsOptional()
+  @IsObject()
+  attribution?: Record<string, any>;
 }

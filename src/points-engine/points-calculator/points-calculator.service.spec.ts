@@ -1,149 +1,45 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { PointsCalculatorService } from './points-calculator.service';
+import { PointsAggregatorService } from '../points-aggregator.service';
+import { STRUCTURED_POINTS_RULES } from '../constants/points-catalogue';
 import { PointsRuleRepository } from '../points-rule.repository';
+import { PolicyConfigService } from '../../policy-config/policy-config.service';
 
-describe('PointsCalculatorService', () => {
-  let service: PointsCalculatorService;
-
-  const mockConfigRepo = {
-    findAllActive: jest.fn().mockResolvedValue([]),
-  };
-
-  const mockRuleRepo = {
-    findAll: jest.fn().mockResolvedValue([
-      {
-        id: '1',
-        category: 'age',
-        min_value: 25,
-        max_value: 32,
-        points_value: 30,
-        is_active: true,
-        visa_group: 'GSM',
-      },
-      {
-        id: '2',
-        category: 'english',
-        attribute_label: 'superior',
-        points_value: 20,
-        is_active: true,
-        visa_group: 'GSM',
-      },
-      {
-        id: '3',
-        category: 'education',
-        attribute_label: 'bachelors_masters',
-        points_value: 15,
-        is_active: true,
-        visa_group: 'GSM',
-      },
-      {
-        id: '4',
-        category: 'work_experience',
-        sub_category: 'overseas_3_4',
-        min_value: 3,
-        max_value: 4,
-        points_value: 5,
-        is_active: true,
-        visa_group: 'GSM',
-      },
-      {
-        id: '5',
-        category: 'work_experience',
-        sub_category: 'australia_1_2',
-        min_value: 1,
-        max_value: 2,
-        points_value: 5,
-        is_active: true,
-        visa_group: 'GSM',
-      },
-      {
-        id: '6',
-        category: 'nomination',
-        attribute_label: '190',
-        points_value: 5,
-        is_active: true,
-        visa_group: 'GSM',
-      },
-    ]),
-  };
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        PointsCalculatorService,
-        { provide: PointsRuleRepository, useValue: mockRuleRepo },
-      ],
-    }).compile();
-
-    service = module.get<PointsCalculatorService>(PointsCalculatorService);
+describe('Shared GSM calculator', () => {
+  const configured = new Map<string, number>([
+    ['points.gsmMaxAge', 45],
+    ['points.combinedWorkCap', 20],
+    ['points.gsmPassMark', 65],
+    ['points.stateNominationBonus', 5],
+    ['points.regionalNominationBonus', 15],
+  ]);
+  const policy = {
+    getRequiredNumber: async (key: string) => configured.get(key)!,
+    latestEffectiveDate: async () => null,
+  } as unknown as PolicyConfigService;
+  const rules = STRUCTURED_POINTS_RULES.map(r => ({ category: r.category, attribute_label: r.attributeLabel,
+    min_value: r.minValue, max_value: r.maxValue, points_value: r.points, is_active: true }));
+  const aggregator = new PointsAggregatorService({ findActive: async () => rules } as unknown as PointsRuleRepository, policy);
+  const calculator = new PointsCalculatorService(aggregator, policy);
+  const input = { visaGroup: 'GSM', subclass: '189', age: 30, englishLevel: 'superior', educationLevel: 'bachelor_masters', workExperienceOverseas: 8, workExperienceAustralia: 8 };
+  it('uses the real uppercase rubric and caps combined employment', async () => {
+    const r = await calculator.calculatePoints(input);
+    expect(r.totalPoints).toBe(85); expect(r.breakdown.WORK_EXPERIENCE_COMBINED).toBe(20);
   });
-
-  it('calculates points with seed rules (happy path)', async () => {
-    const input = {
-      visaGroup: 'GSM',
-      subclass: '189',
-      age: 30,
-      englishLevel: 'superior',
-      educationLevel: 'bachelors_masters',
-      workExperienceOverseas: 3,
-      workExperienceAustralia: 2,
-      australianStudyRequirement: false,
-      isRegional: false,
-      naati: false,
-      professionalYear: false,
-    } as any;
-
-    const result = await service.calculatePoints(input);
-    expect(result.totalPoints).toBeGreaterThan(0);
-    expect(result.breakdown.age).toBe(30);
-    expect(result.breakdown.english).toBe(20);
-    expect(result.breakdown.education).toBe(15);
+  it('shares base scoring across the three subclasses', async () => {
+    const scores = await Promise.all(['189','190','491'].map(subclass => calculator.calculatePoints({ ...input, subclass })));
+    expect(scores.map(s => s.totalPoints)).toEqual([85,90,100]);
   });
-
-  it('returns ineligible for age 45+', async () => {
-    const input = {
-      visaGroup: 'GSM',
-      subclass: '189',
-      age: 45,
-      englishLevel: 'competent',
-      educationLevel: 'bachelors_masters',
-      workExperienceOverseas: 0,
-      workExperienceAustralia: 0,
-    } as any;
-
-    const result = await service.calculatePoints(input);
-    expect(result.totalPoints).toBe(0);
-    expect(result.ineligibilityReason).toContain('under 45');
+  it('reads additional factors from rubric rows', async () => {
+    const repo = { findActive: async () => [...rules,
+      ...['AUSTRALIAN_STUDY','SPECIALIST_EDUCATION','PROFESSIONAL_YEAR','COMMUNITY_LANGUAGE','PARTNER_SKILLS'].map((category,i) => ({ category, attribute_label: ['standard','stem_research','standard','ccl','english_only'][i], points_value: 5, is_active: true }))] };
+    const service = new PointsCalculatorService(new PointsAggregatorService(repo as unknown as PointsRuleRepository, policy), policy);
+    const r = await service.calculatePoints({ ...input, australianStudyRequirement: true, stemResearch: true, professionalYear: true, naati: true, partnerSkills: 'english_only' });
+    expect(r.totalPoints).toBe(110);
   });
-
-  it('caps work experience at 20 points', async () => {
-    const input = {
-      visaGroup: 'GSM',
-      subclass: '189',
-      age: 30,
-      englishLevel: 'competent',
-      educationLevel: 'diploma_trade',
-      workExperienceOverseas: 10,
-      workExperienceAustralia: 10,
-    } as any;
-
-    const result = await service.calculatePoints(input);
-    expect(result.breakdown.work_experience).toBeLessThanOrEqual(20);
+  it('reports the configured age boundary', async () => {
+    expect((await calculator.calculatePoints({ ...input, age: 45 })).ineligibilityReason).toContain('45');
   });
-
-  it('shows below pass mark for scores under 65', async () => {
-    const input = {
-      visaGroup: 'GSM',
-      subclass: '189',
-      age: 40,
-      englishLevel: 'competent',
-      educationLevel: 'diploma_trade',
-      workExperienceOverseas: 0,
-      workExperienceAustralia: 0,
-    } as any;
-
-    const result = await service.calculatePoints(input);
-    expect(result.totalPoints).toBeLessThan(65);
-    expect(result.belowPassMark).toBe(true);
+  it('rejects superseded business scoring', async () => {
+    await expect(calculator.calculatePoints({ ...input, subclass: '188' })).rejects.toThrow('Only GSM');
   });
 });

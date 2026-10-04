@@ -1,3 +1,4 @@
+import { ProspectNotifierService } from './prospect-notifier.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ProspectService } from './prospect.service';
@@ -38,6 +39,7 @@ describe('ProspectService.getPublicStatus', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProspectService,
+        { provide: ProspectNotifierService, useValue: { notifyCaptured: jest.fn().mockResolvedValue(undefined) } },
         { provide: ProspectRepository, useValue: prospects },
         { provide: ProspectSummaryService, useValue: { get: jest.fn() } },
         { provide: ConsultationBookingRepository, useValue: bookings },
@@ -226,6 +228,7 @@ describe('ProspectService.reportBooking', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProspectService,
+        { provide: ProspectNotifierService, useValue: { notifyCaptured: jest.fn().mockResolvedValue(undefined) } },
         { provide: ProspectRepository, useValue: prospects },
         { provide: ProspectSummaryService, useValue: summary },
         { provide: ConsultationBookingRepository, useValue: bookings },

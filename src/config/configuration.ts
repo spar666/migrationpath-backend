@@ -3,6 +3,7 @@
  * Groups environment variables into typed, logical sections.
  */
 export default () => ({
+  features: { paymentsEnabled: process.env.PAYMENTS_ENABLED === 'true' },
   app: {
     port: parseInt(process.env.PORT || '3000', 10),
     nodeEnv: process.env.NODE_ENV || 'development',

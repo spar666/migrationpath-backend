@@ -1,3 +1,4 @@
+import { ProspectNotifierService } from './prospect-notifier.service';
 import {
   BadRequestException,
   Injectable,
@@ -40,6 +41,7 @@ export class ProspectService {
     private readonly prospectRepository: ProspectRepository,
     private readonly summaryService: ProspectSummaryService,
     private readonly bookingRepository: ConsultationBookingRepository,
+    private readonly notifier: ProspectNotifierService,
   ) {}
 
   /**
@@ -48,7 +50,7 @@ export class ProspectService {
    * PreScreenService for that.
    */
   async capture(dto: CreateProspectDto): Promise<Prospect> {
-    if (!dto.consent_given) {
+    if (!dto.consent_given || !dto.consent_text?.trim()) {
       // Refusing here rather than storing consent_given=false is deliberate:
       // we should not hold personal information we were not given permission
       // to collect. See §7.
@@ -69,6 +71,8 @@ export class ProspectService {
       consent_text: dto.consent_text,
       consent_at: new Date(),
       stage: 'captured',
+      captured_answers: dto.answers,
+      attribution: dto.attribution,
     });
 
     await this.summaryService.refresh(prospect.id, {
@@ -83,13 +87,18 @@ export class ProspectService {
    * Callers that need engine flags set should use `create` then `applyScreen`.
    */
   async create(data: Partial<Prospect>): Promise<Prospect> {
+    if (data.consent_given !== true || !data.consent_text?.trim() || !data.consent_at) {
+      throw new BadRequestException('Consent text and timestamp are required.');
+    }
     const human_ref = await this.generateHumanRef();
 
-    return this.prospectRepository.create({
+    const prospect = await this.prospectRepository.create({
       ...data,
       human_ref,
-      email: data.email?.toLowerCase(),
+      email: data.email?.trim().toLowerCase(),
     });
+    void this.notifier.notifyCaptured(prospect);
+    return prospect;
   }
 
   async findById(id: string): Promise<Prospect> {
@@ -116,10 +125,11 @@ export class ProspectService {
     prospectId: string,
     flags: { statutory_eligible: boolean; client_fit: boolean },
   ): Promise<Prospect> {
+    const prospect = await this.findById(prospectId);
     return this.prospectRepository.update(prospectId, {
       statutory_eligible: flags.statutory_eligible,
       client_fit: flags.client_fit,
-      stage: 'pre_screened',
+      stage: prospect.stage === 'captured' ? 'pre_screened' : prospect.stage,
     });
   }
 
@@ -131,7 +141,11 @@ export class ProspectService {
     prospectId: string,
     stage: ProspectStage,
   ): Promise<Prospect> {
+    if (!(stage in STAGE_ORDER)) throw new BadRequestException('Invalid prospect stage');
     const prospect = await this.findById(prospectId);
+    if (stage === 'booked' && (prospect.statutory_eligible !== true || prospect.client_fit !== true || prospect.stage === 'disqualified')) {
+      throw new BadRequestException('Prospect is not cleared for booking.');
+    }
     if (STAGE_ORDER[stage] <= STAGE_ORDER[prospect.stage]) {
       this.logger.debug(
         `Not advancing prospect ${prospect.human_ref} from ${prospect.stage} to ${stage}`,
@@ -139,6 +153,13 @@ export class ProspectService {
       return prospect;
     }
     return this.prospectRepository.update(prospectId, { stage });
+  }
+
+  async review(prospectId: string, review: { statutory_eligible?: boolean; client_fit?: boolean; agent_notes: string }) {
+    await this.findById(prospectId);
+    const updated = await this.prospectRepository.update(prospectId, review);
+    await this.summaryService.refresh(prospectId);
+    return updated;
   }
 
   async linkSponsor(prospectId: string, sponsorId: string): Promise<Prospect> {
@@ -251,6 +272,10 @@ export class ProspectService {
   ) {
     // Validates identity and 404s on a mismatch before anything is written.
     const status = await this.getPublicStatus(prospectId, humanRef);
+
+    if (status.statutory_eligible !== true || status.client_fit !== true || status.stage === 'disqualified') {
+      throw new BadRequestException('A qualifying pre-screen and client-fit review are required before booking.');
+    }
 
     // Already have a slot: the webhook beat us, or this is a double-report from
     // a re-rendered page. Either way, creating a second row for one booking

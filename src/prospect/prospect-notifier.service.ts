@@ -49,6 +49,18 @@ export class ProspectNotifierService {
    * (unpaid) booking: those live in the follow-up queue, and alerting on them
    * would train the agent to ignore the alert.
    */
+  async notifyCaptured(prospect: Prospect): Promise<void> {
+    const to = this.configService.get<string>('notifications.leadNotificationEmail');
+    if (!this.transporter || !to) return;
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get<string>('notifications.emailFrom'), to,
+        subject: `New prospect ${prospect.human_ref}`,
+        text: `${prospect.full_name} (${prospect.email})\nSource: ${prospect.source}\nStage: ${prospect.stage}\n${this.prepUrl(prospect) ?? ''}`,
+      });
+    } catch (error) { this.logger.error(`Prospect notification failed: ${(error as Error).message}`); }
+  }
+
   async notifyBookingConfirmed(
     prospect: Prospect,
     context: BookingConfirmedContext = {},

@@ -7,7 +7,6 @@ import {
   EligibilityResult,
 } from './partner-eligibility.engine';
 import { PartnerEligibilityDto } from './dto/partner-eligibility.dto';
-import { LeadsService } from '../leads/leads.service';
 import { ProspectService } from '../prospect/prospect.service';
 import { ProspectSummaryService } from '../prospect/prospect-summary.service';
 
@@ -39,7 +38,6 @@ export class PartnerEligibilityService {
     @InjectRepository(PartnerEligibilitySubmission)
     private readonly submissions: Repository<PartnerEligibilitySubmission>,
     private readonly engine: PartnerEligibilityEngine,
-    private readonly leadsService: LeadsService,
     private readonly prospectService: ProspectService,
     private readonly summaryService: ProspectSummaryService,
   ) {}
@@ -47,7 +45,7 @@ export class PartnerEligibilityService {
   async submit(
     dto: PartnerEligibilityDto,
   ): Promise<PartnerEligibilityResponse> {
-    if (!dto.consent_given) {
+    if (!dto.consent_given || !dto.consent_text?.trim()) {
       throw new BadRequestException(
         'Consent is required before we can record your details.',
       );
@@ -83,28 +81,6 @@ export class PartnerEligibilityService {
     // and they may become eligible.
     const prospect = await this.createProspect(dto, result, saved.id);
 
-    // Also register the submission as a lead so it shows up in the admin
-    // Leads panel and triggers the usual new-lead notifications. Lead
-    // capture must never fail the quiz response itself.
-    this.leadsService
-      .create({
-        full_name: `${dto.applicantFirstName} & ${dto.sponsorFirstName}`,
-        email: dto.email,
-        visa_type: 'Partner visa (820/801/309/100/300)',
-        message:
-          `Partner eligibility quiz — ${result.summary} (${result.effort}). ` +
-          `Completed by: ${dto.completedBy}. ` +
-          `Applicant country: ${dto.applicantCountry}. ` +
-          `Relationship: ${dto.relationshipStatus}. ` +
-          `Submission: ${saved.id}`,
-        source: 'partner_eligibility',
-      })
-      .catch((error) => {
-        this.logger.error(
-          `Failed to create lead for eligibility submission ${saved.id}: ${error.message}`,
-        );
-      });
-
     return {
       id: saved.id,
       applicantFirstName: saved.applicantFirstName,
@@ -114,7 +90,7 @@ export class PartnerEligibilityService {
       // Both conditions matter. Without a prospect there is nothing for the
       // booking to attach to, so the CTA would produce an unlinked Calendly
       // invitee the agent cannot reconcile.
-      can_book: Boolean(prospect) && result.outcome !== 'ineligible',
+      can_book: prospect?.statutory_eligible === true && prospect?.client_fit === true,
       ...result,
     };
   }
@@ -146,15 +122,26 @@ export class PartnerEligibilityService {
         // commercial call and this quiz does not ask what it would need to
         // (budget, complexity, whether we service the case) — so it is left
         // null rather than guessed. An agent sets it.
-        statutory_eligible: result.outcome !== 'ineligible',
+        statutory_eligible: result.outcome === 'eligible' && !result.becomingEligible,
         client_fit: null,
         stage: 'pre_screened',
+        captured_answers: dto as unknown as Record<string, unknown>,
+        outcome_tag: 'review_required',
+        gap_codes: ['client_fit_review'],
+        rma_review_flags: ['partner_evidence_review'],
+        risk_flags: result.highRisk ? ['partner_high_risk'] : [],
+        attribution: {
+          channel: dto.hearAboutUs,
+          channel_detail: dto.hearAboutUsOther,
+          referred: dto.referred,
+          referral_code: dto.referralCode,
+        },
       });
 
       await this.summaryService.refresh(prospect.id, {
         answers: dto as unknown as Record<string, any>,
         eligibility: {
-          statutory_eligible: result.outcome !== 'ineligible',
+          statutory_eligible: result.outcome === 'eligible' && !result.becomingEligible,
           client_fit: null,
           recommended_subclass: '820/801/309/100/300',
           outcome: result.outcome,

@@ -1,3 +1,4 @@
+import { Matches } from 'class-validator';
 import {
   IsBoolean,
   IsEmail,
@@ -56,12 +57,16 @@ export class CreateProspectDto {
   @IsBoolean()
   consent_given: boolean;
 
-  @IsOptional()
   @IsString()
-  consent_text?: string;
+  @Matches(/\S/)
+  consent_text: string;
 
   /** Free-form calculator output / partial answers, stored on the summary. */
   @IsOptional()
   @IsObject()
   answers?: Record<string, any>;
+
+  @IsOptional()
+  @IsObject()
+  attribution?: Record<string, any>;
 }

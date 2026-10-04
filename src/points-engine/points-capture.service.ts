@@ -4,9 +4,7 @@ import { CaptureCalculatorLeadDto } from './dto/capture-lead.dto';
 import { StructuredPointsResultDto } from './dto/user-profile.dto';
 import { ProspectService } from '../prospect/prospect.service';
 import { ProspectSummaryService } from '../prospect/prospect-summary.service';
-import { LeadsService } from '../leads/leads.service';
 import { PolicyConfigService } from '../policy-config/policy-config.service';
-import { GSM_MAX_AGE } from './constants/points-catalogue';
 
 /**
  * The points-tested subclasses this product features. 189 is scored on the
@@ -42,21 +40,7 @@ export interface CalculatorCaptureResult extends StructuredPointsResultDto {
   standing: SubclassStanding[];
 }
 
-/**
- * Lead capture at the end of the points calculator.
- *
- * The score itself is never gated: `POST /points/calculate/total` stays public
- * and anonymous, and a visitor can see their number without giving a name.
- * This endpoint is the step *after* that — they hand over contact details to
- * find out what the number means and to talk to someone.
- *
- * It puts them on the same funnel spine every other entry point uses: a
- * `prospects` row (which the Calendly link, the booking webhook, Stripe
- * checkout and the admin list all key on) plus a `leads` row for the admin
- * Leads panel and the new-lead notification. That is the whole point — with
- * accounts gone this is the only conversion path on the highest-traffic page,
- * so it must land in the pipeline the agents already watch, not a new one.
- */
+/** Captures one prospect with the server-calculated score and answers. */
 @Injectable()
 export class PointsCaptureService {
   private readonly logger = new Logger(PointsCaptureService.name);
@@ -65,14 +49,13 @@ export class PointsCaptureService {
     private readonly aggregator: PointsAggregatorService,
     private readonly prospectService: ProspectService,
     private readonly summaryService: ProspectSummaryService,
-    private readonly leadsService: LeadsService,
     private readonly policyConfig: PolicyConfigService,
   ) {}
 
   async capture(
     dto: CaptureCalculatorLeadDto,
   ): Promise<CalculatorCaptureResult> {
-    if (!dto.consent_given) {
+    if (!dto.consent_given || !dto.consent_text?.trim()) {
       throw new BadRequestException(
         'Consent is required before we can record your details.',
       );
@@ -85,30 +68,12 @@ export class PointsCaptureService {
 
     const prospect = await this.createProspect(dto, result, standing);
 
-    // The Leads panel is where the team actually watches for new enquiries.
-    // Fire-and-forget: a notification problem must not cost us the capture the
-    // person is waiting on a response to.
-    this.leadsService
-      .create({
-        full_name: dto.full_name,
-        email: dto.email,
-        phone: dto.phone,
-        visa_type: 'Skilled — points tested (189/190/491)',
-        message: this.buildLeadMessage(result, standing, prospect?.human_ref),
-        source: 'points_calculator',
-      })
-      .catch((error: Error) => {
-        this.logger.error(
-          `Failed to create lead for calculator capture ${prospect?.human_ref ?? '(no prospect)'}: ${error.message}`,
-        );
-      });
-
     return {
       ...result,
       standing,
       prospect_id: prospect?.id ?? null,
       human_ref: prospect?.human_ref ?? null,
-      can_book: Boolean(prospect),
+      can_book: prospect?.statutory_eligible === true && prospect?.client_fit === true,
     };
   }
 
@@ -127,14 +92,15 @@ export class PointsCaptureService {
     age: number,
   ): Promise<SubclassStanding[]> {
     const [passMark, stateBonus, regionalBonus] = await Promise.all([
-      this.policyConfig.getNumber('points.gsmPassMark', 65),
-      this.policyConfig.getNumber('points.stateNominationBonus', 5),
-      this.policyConfig.getNumber('points.regionalNominationBonus', 15),
+      this.policyConfig.getRequiredNumber('points.gsmPassMark'),
+      this.policyConfig.getRequiredNumber('points.stateNominationBonus'),
+      this.policyConfig.getRequiredNumber('points.regionalNominationBonus'),
     ]);
 
     // An applicant at or over the age limit cannot hold any of these, whatever
     // the arithmetic says — so no subclass is reported as passing.
-    const ageEligible = age < GSM_MAX_AGE;
+    const ageEligible =
+      age < await this.policyConfig.getRequiredNumber('points.gsmMaxAge');
 
     const bonusFor: Record<FeaturedSubclass, number> = {
       '189': 0,
@@ -185,6 +151,12 @@ export class PointsCaptureService {
         statutory_eligible: standing.some((s) => s.meetsPassMark),
         client_fit: null,
         stage: 'pre_screened',
+        captured_answers: dto.profile as unknown as Record<string, unknown>,
+        outcome_tag: 'review_required',
+        gap_codes: ['client_fit_review'],
+        rma_review_flags: [],
+        risk_flags: [],
+        attribution: dto.attribution,
       });
 
       // The inputs and the score go on the summary, not just the total: the
@@ -216,23 +188,4 @@ export class PointsCaptureService {
     }
   }
 
-  private buildLeadMessage(
-    result: StructuredPointsResultDto,
-    standing: SubclassStanding[],
-    humanRef?: string,
-  ): string {
-    const perSubclass = standing
-      .map(
-        (s) =>
-          `${s.subclass}: ${s.effectivePoints}${s.meetsPassMark ? '' : ' (below pass mark)'}`,
-      )
-      .join(', ');
-
-    return (
-      `Points calculator — ${result.totalPoints} points. ` +
-      `With nomination: ${perSubclass}. ` +
-      (result.ineligibilityReason ? `${result.ineligibilityReason} ` : '') +
-      (humanRef ? `Prospect: ${humanRef}` : 'Prospect record was not created.')
-    );
-  }
 }

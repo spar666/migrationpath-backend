@@ -14,7 +14,6 @@ import { UserPointsService } from './user-points.service';
 import { OccupationsModule } from '../occupations/occupations.module';
 import { PolicyConfigModule } from '../policy-config/policy-config.module';
 import { ProspectModule } from '../prospect/prospect.module';
-import { LeadsModule } from '../leads/leads.module';
 
 @Module({
   imports: [
@@ -22,7 +21,6 @@ import { LeadsModule } from '../leads/leads.module';
     OccupationsModule,
     PolicyConfigModule,
     ProspectModule,
-    LeadsModule,
   ],
   controllers: [PointsEngineController],
   providers: [

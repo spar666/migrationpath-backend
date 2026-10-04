@@ -251,7 +251,10 @@ export class PaymentsService implements OnModuleInit {
    * Stripe being unreachable at boot is not a reason to stop serving the rest
    * of the API, and checkout would surface it anyway.
    */
+  paymentsEnabled(): boolean { return this.configService.get<boolean>('features.paymentsEnabled') === true; }
+
   async onModuleInit(): Promise<void> {
+    if (this.configService.get<boolean>('features.paymentsEnabled') !== true) return;
     const priceId = this.configService.get<string>(
       'integrations.stripe.consultPriceId',
     );
@@ -310,6 +313,9 @@ export class PaymentsService implements OnModuleInit {
   async createConsultationCheckout(
     dto: CreateConsultationCheckoutDto,
   ): Promise<{ checkout_url: string; payment_id: string }> {
+    if (this.configService.get<boolean>('features.paymentsEnabled') !== true) {
+      throw new ServiceUnavailableException('Payments are currently disabled.');
+    }
     const stripe = this.requireStripe();
 
     const priceId = this.configService.get<string>(
@@ -342,6 +348,9 @@ export class PaymentsService implements OnModuleInit {
     // endpoint being used to probe for valid prospect ids with a real charge.
     const prospect = await this.prospectService.findById(dto.prospect_id);
 
+    if (prospect.statutory_eligible !== true || prospect.client_fit !== true || prospect.stage === 'disqualified') {
+      throw new BadRequestException('Prospect is not cleared for booking.');
+    }
     if (await this.paymentRepository.hasPaidFor(prospect.id, 'consultation')) {
       // Charging twice for the same consult is worse than a slightly awkward
       // error, and it is a refund conversation either way.
@@ -380,6 +389,9 @@ export class PaymentsService implements OnModuleInit {
       );
     }
 
+    if (booking.prospect_id !== prospect.id || booking.status === 'cancelled') {
+      throw new BadRequestException('Booking does not belong to this prospect or is cancelled.');
+    }
     const successUrl = this.configService.get<string>(
       'integrations.stripe.successUrl',
     );
@@ -657,6 +669,9 @@ export class PaymentsService implements OnModuleInit {
     paymentId: string,
     sessionId: string,
   ): Promise<'recovered' | 'expired' | 'open'> {
+    if (this.configService.get<boolean>('features.paymentsEnabled') !== true) {
+      throw new ServiceUnavailableException('Payments are currently disabled.');
+    }
     const stripe = this.requireStripe();
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 

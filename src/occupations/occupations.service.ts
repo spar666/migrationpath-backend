@@ -1,3 +1,4 @@
+import { OccupationListMembership } from './entities/occupation-list-membership.entity';
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
@@ -60,7 +61,6 @@ export class OccupationsService {
       'anzsco_code',
       'occupation_name',
       'assessing_authority',
-      'primary_list',
     ] as const;
 
     for (const key of filterable) {
@@ -68,6 +68,8 @@ export class OccupationsService {
         where[key] = filters[key];
       }
     }
+
+    if (filters.list || filters.primary_list) where.listMemberships = { list_code: filters.list || filters.primary_list };
 
     const take = Math.min(Math.max(parseInt(filters.limit, 10) || 50, 1), 200);
     const page = Math.max(parseInt(filters.page, 10) || 1, 1);
@@ -195,7 +197,7 @@ export class OccupationsService {
       description: dto.description ?? null,
       assessing_authority: dto.assessingAuthority ?? null,
       points_value: dto.pointsValue ?? 0,
-      primary_list: dto.primaryList ?? null,
+      listMemberships: (dto.lists ?? (dto.primaryList ? [dto.primaryList] : [])).map(list_code => ({ list_code, source_note: null, effective_date: null })),
     });
     await this.occupationRepository.save(occupation);
 
@@ -203,7 +205,7 @@ export class OccupationsService {
     await this.dataSource.transaction((manager) =>
       this.resolveVisasForOccupation(
         dto.anzscoCode,
-        dto.primaryList ?? null,
+        dto.lists ?? (dto.primaryList ? [dto.primaryList] : []),
         manager,
         true,
       ),
@@ -231,24 +233,15 @@ export class OccupationsService {
       existing.assessing_authority = dto.assessingAuthority;
     if (dto.pointsValue !== undefined) existing.points_value = dto.pointsValue;
 
-    const listChanged =
-      dto.primaryList !== undefined &&
-      dto.primaryList !== existing.primary_list;
-    if (dto.primaryList !== undefined) existing.primary_list = dto.primaryList;
-
-    await this.occupationRepository.save(existing);
-
-    // Re-resolve links whenever the classifying list changes.
-    if (listChanged) {
-      await this.dataSource.transaction((manager) =>
-        this.resolveVisasForOccupation(
-          anzscoCode,
-          existing.primary_list,
-          manager,
-          true,
-        ),
-      );
-    }
+    await this.dataSource.transaction(async manager => {
+      await manager.getRepository(Occupation).save(existing);
+      if (dto.lists !== undefined || dto.primaryList !== undefined) {
+        const lists = dto.lists ?? (dto.primaryList ? [dto.primaryList] : []);
+        await manager.getRepository(OccupationListMembership).delete({ occupation_code: anzscoCode });
+        if (lists.length) await manager.getRepository(OccupationListMembership).save(lists.map(list_code => ({ occupation_code: anzscoCode, list_code })));
+        await this.resolveVisasForOccupation(anzscoCode, lists, manager, true);
+      }
+    });
 
     return this.findOne(anzscoCode);
   }
@@ -307,11 +300,14 @@ export class OccupationsService {
 
     const occupation = await this.occupationRepository.findOne({
       where: { anzsco_code: anzscoCode },
-      select: ['anzsco_code', 'primary_list'],
+      relations: ['listMemberships'],
     });
 
-    if (!occupation?.primary_list) return null;
-    return lists.includes(occupation.primary_list);
+    if (!occupation?.listMemberships?.length) return null;
+    // Legacy memberships have no verified provenance and cannot reject applicants.
+    const verified = occupation.listMemberships.filter(m => m.source_note && m.effective_date && m.effective_date <= new Date().toISOString().slice(0, 10));
+    if (!verified.length) return null;
+    return verified.some(m => lists.includes(m.list_code));
   }
 
   /**
@@ -340,14 +336,14 @@ export class OccupationsService {
       };
 
       for (const occupation of occupations) {
-        if (!occupation.primary_list) {
+        if (!occupation.listMemberships?.length) {
           result.skippedUnclassified += 1;
           continue;
         }
 
         const perOccupation = await this.resolveVisasForOccupation(
           occupation.anzsco_code,
-          occupation.primary_list,
+          occupation.listMemberships.map(m => m.list_code),
           manager,
           deactivateStale,
         );
@@ -371,14 +367,14 @@ export class OccupationsService {
    */
   private async resolveVisasForOccupation(
     anzscoCode: string,
-    primaryList: SkilledList | null,
+    lists: SkilledList[],
     manager: EntityManager,
     deactivateStale: boolean,
   ): Promise<{ created: number; reactivated: number; deactivated: number }> {
     const visaRepo = manager.getRepository(Visa);
     const occupationVisaRepo = manager.getRepository(OccupationVisa);
 
-    const targetSubclasses = resolveEligibleSubclasses(primaryList);
+    const targetSubclasses = [...new Set(lists.flatMap(list => resolveEligibleSubclasses(list)))];
 
     // Map desired subclass numbers -> visa rows (active visas only).
     const targetVisas = targetSubclasses.length

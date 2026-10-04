@@ -1,3 +1,4 @@
+import { ReviewProspectDto } from './dto/review-prospect.dto';
 import {
   Body,
   Controller,
@@ -145,6 +146,14 @@ export class ProspectController {
   })
   getByRef(@Param('humanRef') humanRef: string) {
     return this.prospectService.findByHumanRef(humanRef);
+  }
+
+  @Patch(':id/review')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  review(@Param('id') id: string, @Body() dto: ReviewProspectDto) {
+    return this.prospectService.review(id, dto);
   }
 
   @Patch(':id/stage')

@@ -200,7 +200,23 @@ export class WebhooksService implements OnModuleInit {
    * Creates a PENDING booking. Pending means unpaid, and that is deliberate:
    * these rows are the agent's follow-up queue (see the entity comment).
    */
+  private async confirmFreeBooking(bookingId: string, prospectId?: string): Promise<void> {
+    if (!prospectId || this.paymentsService.paymentsEnabled()) return;
+    const booking = await this.bookingRepository.findById(bookingId);
+    if (!booking || booking.status === 'cancelled') return;
+    await this.bookingRepository.update(bookingId, { status: 'confirmed' });
+    await this.prospectService.advanceStage(prospectId, 'booked');
+    await this.summaryService.refresh(prospectId);
+  }
+
   async handleCalendlyInviteeCreated(invitee: CalendlyInvitee): Promise<void> {
+    if (invitee.prospectId) {
+      const prospect = await this.prospectService.findById(invitee.prospectId);
+      if (prospect.statutory_eligible !== true || prospect.client_fit !== true || prospect.stage === 'disqualified') {
+        this.logger.warn(`Calendly booking requires manual review for prospect ${invitee.prospectId}`);
+        return;
+      }
+    }
     const existing = await this.bookingRepository.findBySchedulerEventId(
       invitee.inviteeUri,
     );
@@ -211,9 +227,11 @@ export class WebhooksService implements OnModuleInit {
       // account of what Calendly showed it, and Calendly's are the real ones.
       if (existing.client_reported_at) {
         await this.adoptClientReportedBooking(existing.id, invitee);
+        await this.confirmFreeBooking(existing.id, invitee.prospectId);
         return;
       }
 
+      await this.confirmFreeBooking(existing.id, invitee.prospectId);
       this.logger.log(
         `Calendly invitee ${invitee.inviteeUri} already has a booking — skipping`,
       );
@@ -232,6 +250,7 @@ export class WebhooksService implements OnModuleInit {
         );
       if (clientReported) {
         await this.adoptClientReportedBooking(clientReported.id, invitee);
+        await this.confirmFreeBooking(clientReported.id, invitee.prospectId);
         return;
       }
     }
@@ -277,6 +296,8 @@ export class WebhooksService implements OnModuleInit {
         },
       });
     }
+
+    await this.confirmFreeBooking(booking.id, invitee.prospectId);
 
     // NOTE: the prospect stage is NOT advanced to 'booked' here. Under
     // book-then-pay a held slot is not a booking until it is paid for; the
@@ -402,6 +423,11 @@ export class WebhooksService implements OnModuleInit {
     if (!payment) return;
 
     const prospectId = payment.prospect_id;
+    const screened = await this.prospectService.findById(prospectId);
+    if (screened.statutory_eligible !== true || screened.client_fit !== true || screened.stage === 'disqualified') {
+      this.logger.warn(`Payment recorded for ${prospectId}; booking requires manual review.`);
+      return;
+    }
 
     const booking = payment.booking_id
       ? await this.bookingRepository

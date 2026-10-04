@@ -86,7 +86,7 @@ export class PointsEngineController {
     return this.captureService.capture(dto);
   }
 
-  @Post('calculate/business')
+  // Retired business calculation (not exposed as an HTTP route).
   @ApiOperation({ summary: 'Calculate Business points (public, stateless)' })
   calculateBusiness(@Body() input: BusinessPointsInputDto) {
     return this.calculator.calculateBusinessPoints(input);
@@ -116,7 +116,7 @@ export class PointsEngineController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  @ApiOperation({ summary: 'Update points configuration (admin only)' })
+  @ApiOperation({ summary: 'Update Points Rubric (admin only)' })
   updateConfig(
     @Param('id') id: string,
     @Body() dto: UpdatePointsConfigDto,
@@ -142,7 +142,7 @@ export class PointsEngineController {
     return this.pointsEngineService.removeConfig(id);
   }
 
-  @Post('save')
+  // Retired public account endpoint.
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Save points calculation to user profile' })
@@ -150,7 +150,7 @@ export class PointsEngineController {
     return this.userPointsService.save(user.id, dto);
   }
 
-  @Get('me')
+  // Retired public account endpoint.
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get my latest saved points calculation' })
@@ -158,7 +158,7 @@ export class PointsEngineController {
     return this.userPointsService.getLatest(user.id);
   }
 
-  @Get('history')
+  // Retired public account endpoint.
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get my points calculation history' })
@@ -170,7 +170,7 @@ export class PointsEngineController {
     return this.userPointsService.getHistory(user.id, limit ?? 10);
   }
 
-  @Post('compare')
+  // Retired public account endpoint.
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Compare points across different scenarios' })

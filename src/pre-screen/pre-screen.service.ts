@@ -32,6 +32,9 @@ export interface PreScreenResult {
   client_fit: boolean;
   /** True only when both flags pass — the frontend gates the Book button on this. */
   can_book: boolean;
+  best_fit_pathway?: string;
+  outcome_tag: string;
+  gap_codes: string[];
   recommended_subclass?: string;
   recommended_label?: string;
   reasons: string[];
@@ -78,7 +81,7 @@ export class PreScreenService implements OnModuleInit {
   }
 
   async submit(dto: SubmitPreScreenDto): Promise<PreScreenResult> {
-    if (!dto.contact?.consent_given) {
+    if (!dto.contact?.consent_given || !dto.contact.consent_text?.trim()) {
       throw new BadRequestException(
         'Consent is required before we can record your details.',
       );
@@ -115,6 +118,13 @@ export class PreScreenService implements OnModuleInit {
       statutory_eligible: result.statutory_eligible,
       client_fit: result.client_fit,
       stage: 'pre_screened',
+      best_fit_pathway: result.best_fit_pathway,
+      outcome_tag: result.outcome_tag,
+      gap_codes: result.gap_codes,
+      rma_review_flags: result.rma_review_flags,
+      risk_flags: result.risk_flags,
+      attribution: dto.attribution,
+      captured_answers: this.fallbackAnswers(dto),
     });
 
     // Sponsor / nomination are best-effort. If they fail we still have the
@@ -291,8 +301,7 @@ export class PreScreenService implements OnModuleInit {
       );
     } else {
       nextSteps.push(
-        'Based on what you told us, an employer-sponsored pathway is not open ' +
-          'to you right now.',
+        'This indicative pre-screen needs further review. A registered migration agent can assess the gaps and possible options.',
       );
       if (result.open_questions.length) {
         nextSteps.push(
@@ -307,6 +316,9 @@ export class PreScreenService implements OnModuleInit {
       statutory_eligible: result.statutory_eligible,
       client_fit: result.client_fit,
       can_book: canBook,
+      best_fit_pathway: result.best_fit_pathway,
+      outcome_tag: result.outcome_tag,
+      gap_codes: result.gap_codes,
       recommended_subclass: result.recommended_subclass,
       recommended_label: result.recommended_label,
       reasons: result.reasons,

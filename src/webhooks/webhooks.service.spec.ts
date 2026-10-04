@@ -38,6 +38,7 @@ describe('WebhooksService', () => {
   let summaries: { get: jest.Mock; refresh: jest.Mock };
   let notifier: { notifyBookingConfirmed: jest.Mock };
   let payments: {
+    paymentsEnabled: jest.Mock;
     markPaidFromSession: jest.Mock;
     markSessionUnpaid: jest.Mock;
   };
@@ -60,7 +61,7 @@ describe('WebhooksService', () => {
       advanceStage: jest.fn().mockResolvedValue({}),
       findById: jest
         .fn()
-        .mockResolvedValue({ id: 'prospect-1', human_ref: 'MP-1' }),
+        .mockResolvedValue({ id: 'prospect-1', human_ref: 'MP-1', statutory_eligible: true, client_fit: true }),
     };
     summaries = {
       get: jest.fn().mockResolvedValue({ eligibility: {} }),
@@ -70,6 +71,7 @@ describe('WebhooksService', () => {
       notifyBookingConfirmed: jest.fn().mockResolvedValue(undefined),
     };
     payments = {
+      paymentsEnabled: jest.fn().mockReturnValue(true),
       markPaidFromSession: jest.fn(),
       markSessionUnpaid: jest.fn().mockResolvedValue(null),
     };

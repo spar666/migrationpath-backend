@@ -34,6 +34,8 @@ function engineResult(overrides: Record<string, unknown> = {}) {
     reasons: ['Occupation is listed'],
     blockers: [],
     open_questions: [],
+    rma_review_flags: [],
+    risk_flags: [],
     ...overrides,
   };
 }
@@ -123,6 +125,27 @@ describe('PreScreenService.submit', () => {
   });
 
   describe('ordering', () => {
+    it('passes both English scores from the partner audit to the eligibility engine', async () => {
+      await service.submit({
+        party: 'applicant',
+        contact: CONTACT,
+        applicant: {
+          english_overall: 7,
+          english_lowest_band: 6.5,
+        },
+      } as never);
+
+      expect(engine.assess).toHaveBeenCalledWith(
+        expect.objectContaining({
+          party: 'applicant',
+          applicant: expect.objectContaining({
+            english_overall: 7,
+            english_lowest_band: 6.5,
+          }),
+        }),
+      );
+    });
+
     it('runs the engine BEFORE writing the prospect', async () => {
       // If the rules throw we would rather fail the request than store a
       // prospect with null flags that silently never gets screened.
@@ -203,6 +226,26 @@ describe('PreScreenService.submit', () => {
       );
       await service.submit(applicantDto);
       expect(prospects.create).toHaveBeenCalled();
+    });
+
+    it('persists attribution and review flags independently', async () => {
+      engine.assess.mockResolvedValue(
+        engineResult({
+          rma_review_flags: ['possible_exemption'],
+          risk_flags: ['health_character_concern'],
+        }),
+      );
+
+      await service.submit({
+        ...(applicantDto as object),
+        attribution: { utm_source: 'newsletter', referral_code: 'RMA-1' },
+      } as never);
+
+      expect(prospects.create.mock.calls[0][0]).toMatchObject({
+        rma_review_flags: ['possible_exemption'],
+        risk_flags: ['health_character_concern'],
+        attribution: { utm_source: 'newsletter', referral_code: 'RMA-1' },
+      });
     });
   });
 

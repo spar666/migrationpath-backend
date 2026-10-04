@@ -82,7 +82,54 @@ export class FooterConfigDto {
   resourceLinks?: string[];
 }
 
+export class VisaDetailDto {
+  @ApiProperty()
+  @IsString()
+  subclass: string;
+
+  @ApiProperty()
+  @IsString()
+  title: string;
+
+  @ApiProperty()
+  @IsString()
+  description: string;
+}
+
+export class VisaCategoryDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  buttonLabel?: string;
+
+  @ApiProperty()
+  @IsString()
+  slug: string;
+
+  @ApiProperty()
+  @IsString()
+  title: string;
+
+  @ApiProperty({ type: [VisaDetailDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => VisaDetailDto)
+  visas: VisaDetailDto[];
+}
+
 export class UpdateSiteConfigDto {
+  @ApiPropertyOptional({ type: [VisaCategoryDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => VisaCategoryDto)
+  visaCategories?: VisaCategoryDto[];
+
   @ApiProperty({
     description: 'Home page configuration',
     type: HomePageConfigDto,

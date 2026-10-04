@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { PolicyConfigService } from './policy-config.service';
 import { PolicyConfig } from './entities/policy-config.entity';
@@ -104,6 +104,27 @@ describe('PolicyConfigService', () => {
       const snapshot = await service.snapshot();
       expect(snapshot.get('tsmit')).toBe(73150);
       expect(snapshot.get('min_age')).toBe(18);
+    });
+  });
+
+  describe('getRequiredNumber', () => {
+    it('returns a valid configured value', async () => {
+      await expect(service.getRequiredNumber('tsmit')).resolves.toBe(73150);
+    });
+
+    it('fails explicitly when required configuration is absent', async () => {
+      await expect(
+        service.getRequiredNumber('points.gsmPassMark'),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    });
+
+    it('never accepts zero for a required employer threshold', async () => {
+      repo.find.mockResolvedValue([
+        { configKey: 'employer.coreSkillsIncome', numericValue: 0 },
+      ]);
+      await expect(
+        service.getRequiredNumber('employer.coreSkillsIncome'),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
     });
   });
 

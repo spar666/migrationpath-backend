@@ -38,12 +38,12 @@ describe('OccupationsService', () => {
    */
   describe('isOnAnyList', () => {
     it('confirms an occupation classified on a required list', async () => {
-      occupations.findOne.mockResolvedValue({ primary_list: 'CSOL' });
+      occupations.findOne.mockResolvedValue({ listMemberships: [{ list_code: 'MLTSSL', source_note: 'instrument', effective_date: '2024-01-01' }, { list_code: 'CSOL', source_note: 'instrument', effective_date: '2024-01-01' }] });
       await expect(service.isOnAnyList('261313', ['CSOL'])).resolves.toBe(true);
     });
 
     it('rejects an occupation classified on a different list', async () => {
-      occupations.findOne.mockResolvedValue({ primary_list: 'MLTSSL' });
+      occupations.findOne.mockResolvedValue({ listMemberships: [{ list_code: 'MLTSSL', source_note: 'instrument', effective_date: '2024-01-01' }] });
       await expect(service.isOnAnyList('261313', ['CSOL'])).resolves.toBe(
         false,
       );

@@ -15,9 +15,7 @@ import { AppCacheModule } from './common/cache/cache.module';
 
 // Domain modules
 import { AuthModule } from './auth/auth.module';
-import { UserProfileModule } from './user-profile/user-profile.module';
 
-import { LeadsModule } from './leads/leads.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AdminModule } from './admin/admin.module';
 import { SearchModule } from './search/search.module';
@@ -29,6 +27,7 @@ import { MigrationRuleModule } from './migration-rules/migration-rule.module';
 import { StatsModule } from './stats/stats.module';
 import { PartnerModule } from './partner/partner.module';
 import { PolicyConfigModule } from './policy-config/policy-config.module';
+import { CandidateInviteModule } from './candidate-invite/candidate-invite.module';
 import { DataFreshnessModule } from './data-freshness/data-freshness.module';
 import { SiteConfigModule } from './site-config/site-config.module';
 
@@ -73,8 +72,6 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
 
     // --- Domain ---
     AuthModule,
-    UserProfileModule,
-    LeadsModule,
     AnalyticsModule,
     AdminModule,
     SearchModule,
@@ -82,6 +79,7 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
     PointsEngineModule,
     PartnerModule,
     PolicyConfigModule,
+    CandidateInviteModule,
     DataFreshnessModule,
     SiteConfigModule,
     ConsultationModule,

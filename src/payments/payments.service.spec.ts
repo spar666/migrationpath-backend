@@ -37,14 +37,16 @@ jest.mock('stripe', () =>
 );
 
 const PROSPECT = {
+  statutory_eligible: true, client_fit: true,
   id: 'prospect-1',
   human_ref: 'MP-7F3K9A',
   email: 'ada@example.com',
 };
 
-const BOOKING = { id: 'booking-1', status: 'pending' };
+const BOOKING = { prospect_id: 'prospect-1', id: 'booking-1', status: 'pending' };
 
-const CONFIG: Record<string, string> = {
+const CONFIG: Record<string, string | boolean> = {
+  'features.paymentsEnabled': true,
   'integrations.stripe.secretKey': 'sk_test_123',
   'integrations.stripe.consultPriceId': 'price_123',
   'integrations.stripe.successUrl': 'https://app.example/consult/confirmed',
@@ -61,7 +63,7 @@ describe('PaymentsService.createConsultationCheckout', () => {
   };
   let prospects: { findById: jest.Mock };
   let bookings: { findById: jest.Mock; findLatestForProspect: jest.Mock };
-  let config: Record<string, string>;
+  let config: Record<string, string | boolean>;
 
   async function build() {
     payments = {
@@ -104,6 +106,21 @@ describe('PaymentsService.createConsultationCheckout', () => {
       currency: 'aud',
     });
     await build();
+  });
+
+  it('defaults payments off even with Stripe configured', async () => {
+    delete config['features.paymentsEnabled'];
+    await expect(service.createConsultationCheckout({ prospect_id: PROSPECT.id })).rejects.toThrow('Payments are currently disabled');
+    expect(sessionsCreate).not.toHaveBeenCalled();
+  });
+  it('rejects an intake that has not passed client-fit review', async () => {
+    prospects.findById.mockResolvedValue({ ...PROSPECT, client_fit: null });
+    await expect(service.createConsultationCheckout({ prospect_id: PROSPECT.id })).rejects.toThrow('not cleared');
+    expect(sessionsCreate).not.toHaveBeenCalled();
+  });
+  it('rejects someone else’s booking', async () => {
+    bookings.findById.mockResolvedValue({ ...BOOKING, prospect_id: 'other' });
+    await expect(service.createConsultationCheckout({ prospect_id: PROSPECT.id, booking_id: 'other-booking' })).rejects.toThrow('does not belong');
   });
 
   describe('the price', () => {
@@ -522,7 +539,7 @@ describe('PaymentsService.markSessionUnpaid', () => {
     update: jest.Mock;
     findOpenSessionForBooking: jest.Mock;
   };
-  let config: Record<string, string>;
+  let config: Record<string, string | boolean>;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -614,7 +631,7 @@ describe('PaymentsService.onModuleInit', () => {
   let errors: string[];
   let warns: string[];
 
-  async function build(config: Record<string, string> = { ...CONFIG }) {
+  async function build(config: Record<string, string | boolean> = { ...CONFIG }) {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PaymentsService,

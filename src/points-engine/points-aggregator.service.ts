@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PointsRuleRepository } from './points-rule.repository';
 import { PointsRule } from './entities/points-rule.entity';
 import {
@@ -7,9 +7,6 @@ import {
 } from './dto/user-profile.dto';
 import {
   PointsCategory,
-  COMBINED_WORK_POINTS_CAP,
-  GSM_PASS_MARK,
-  GSM_MAX_AGE,
   DEFAULT_VISA_GROUP,
 } from './constants/points-catalogue';
 import { PolicyConfigService } from '../policy-config/policy-config.service';
@@ -37,17 +34,18 @@ export class PointsAggregatorService {
     profile: UserProfileDto,
   ): Promise<StructuredPointsResultDto> {
     const visaGroup = profile.visaGroup || DEFAULT_VISA_GROUP;
+    if (visaGroup !== DEFAULT_VISA_GROUP) throw new BadRequestException('Only GSM scoring is supported.');
+    const maxAge = await this.policyConfig.getRequiredNumber(
+      'points.gsmMaxAge',
+    );
 
     const rules = await this.ruleRepo.findActive(visaGroup);
 
-    // Admin-editable boundaries; fallbacks match the original constants.
-    const workCap = await this.policyConfig.getNumber(
+    const workCap = await this.policyConfig.getRequiredNumber(
       'points.combinedWorkCap',
-      COMBINED_WORK_POINTS_CAP,
     );
-    const passMark = await this.policyConfig.getNumber(
+    const passMark = await this.policyConfig.getRequiredNumber(
       'points.gsmPassMark',
-      GSM_PASS_MARK,
     );
     const currentAsOf = await this.policyConfig.latestEffectiveDate('points');
 
@@ -99,14 +97,22 @@ export class PointsAggregatorService {
     const combinedWorkPoints = Math.min(combinedWorkRaw, workCap);
     const workCapApplied = combinedWorkRaw > workCap;
 
+    const additional: Record<string, number> = {
+      AUSTRALIAN_STUDY: profile.australianStudy ? labelPoints(PointsCategory.AUSTRALIAN_STUDY, 'standard') : 0,
+      SPECIALIST_EDUCATION: profile.specialistEducation ? labelPoints(PointsCategory.SPECIALIST_EDUCATION, 'stem_research') : 0,
+      PROFESSIONAL_YEAR: profile.professionalYear ? labelPoints(PointsCategory.PROFESSIONAL_YEAR, 'standard') : 0,
+      COMMUNITY_LANGUAGE: profile.communityLanguage ? labelPoints(PointsCategory.COMMUNITY_LANGUAGE, 'ccl') : 0,
+      PARTNER_SKILLS: profile.partnerSkills ? labelPoints(PointsCategory.PARTNER_SKILLS, profile.partnerSkills) : 0,
+    };
     const totalPoints =
       agePoints +
       englishPoints +
       qualificationPoints +
       combinedWorkPoints +
-      regionalStudyPoints;
+      regionalStudyPoints + Object.values(additional).reduce((sum, points) => sum + points, 0);
 
     const breakdown: Record<string, number> = {
+      ...additional,
       [PointsCategory.AGE]: agePoints,
       [PointsCategory.ENGLISH]: englishPoints,
       [PointsCategory.QUALIFICATIONS]: qualificationPoints,
@@ -117,8 +123,8 @@ export class PointsAggregatorService {
     };
 
     const ineligibilityReason =
-      visaGroup === DEFAULT_VISA_GROUP && profile.age >= GSM_MAX_AGE
-        ? `Ineligible: applicants must be under ${GSM_MAX_AGE} for GSM subclasses.`
+      visaGroup === DEFAULT_VISA_GROUP && profile.age >= maxAge
+        ? `The standard age requirement is under ${maxAge} for GSM subclasses.`
         : undefined;
 
     return {

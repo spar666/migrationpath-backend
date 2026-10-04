@@ -16,6 +16,7 @@ describe('AuthService', () => {
   let jwtService: { signAsync: jest.Mock; verifyAsync: jest.Mock };
 
   const mockUser = {
+    role: 'admin',
     id: 'user-1',
     email: 'jane@example.com',
     password: '',
@@ -97,22 +98,10 @@ describe('AuthService', () => {
       );
     });
 
-    it('does not invent a role for a user that has none', async () => {
-      // A missing role must stay missing. Defaulting it here — to 'user' or
-      // anything else — would put an unearned claim on the token.
-      const hashed = await bcrypt.hash('correct-password', 10);
-      userRepository.findOne.mockResolvedValue({
-        ...mockUser,
-        password: hashed,
-      });
-
-      await service.signIn({
-        email: 'jane@example.com',
-        password: 'correct-password',
-      });
-
-      const payload = jwtService.signAsync.mock.calls[0][0];
-      expect(payload.role).toBeUndefined();
+    it('rejects legacy public accounts', async () => {
+      userRepository.findOne.mockResolvedValue({ ...mockUser, role: 'user' });
+      await expect(service.signIn({ email: mockUser.email, password: 'x' })).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(jwtService.signAsync).not.toHaveBeenCalled();
     });
 
     it('rejects sign-in for a nonexistent user', async () => {

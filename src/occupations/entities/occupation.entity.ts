@@ -1,3 +1,4 @@
+import { OccupationListMembership } from './occupation-list-membership.entity';
 import {
   Entity,
   PrimaryColumn,
@@ -47,18 +48,8 @@ export class Occupation {
   @Column({ name: 'points_value', type: 'int', default: 0 })
   points_value: number;
 
-  /**
-   * The single skilled list that classifies this occupation. Drives visa
-   * eligibility resolution via SKILLED_LIST_VISA_MATRIX. Nullable so an
-   * occupation can exist before it has been classified.
-   */
-  @Column({
-    name: 'primary_list',
-    type: 'enum',
-    enum: SkilledList,
-    nullable: true,
-  })
-  primary_list: SkilledList | null;
+  @OneToMany(() => OccupationListMembership, membership => membership.occupation, { eager: true, cascade: ['insert', 'update'] })
+  listMemberships: OccupationListMembership[];
 
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;

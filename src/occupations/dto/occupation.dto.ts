@@ -1,3 +1,4 @@
+import { IsArray, ArrayUnique, Matches } from 'class-validator';
 import { IsString, IsOptional, IsInt, IsEnum } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { SkilledList } from '../constants/visa-mapping';
@@ -8,6 +9,7 @@ export class CreateOccupationDto {
     example: '261313',
   })
   @IsString()
+  @Matches(/^\d{6}$/)
   anzscoCode: string;
 
   @ApiProperty({ example: 'Software Engineer' })
@@ -36,6 +38,13 @@ export class CreateOccupationDto {
   @IsEnum(SkilledList)
   @IsOptional()
   primaryList?: SkilledList;
+
+  @ApiPropertyOptional({ enum: SkilledList, isArray: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsEnum(SkilledList, { each: true })
+  lists?: SkilledList[];
 
   @ApiPropertyOptional()
   @IsInt()
