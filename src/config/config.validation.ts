@@ -53,6 +53,11 @@ export const configValidationSchema = Joi.object({
   // --- Strapi ---
   STRAPI_URL: Joi.string().uri().default('http://localhost:1337'),
   STRAPI_API_TOKEN: Joi.string().optional().allow(''),
+  CMS_PUBLISH_WEBHOOK_SECRET: Joi.string().min(32).optional().allow(''),
+  VERCEL_DEPLOY_HOOK_URL: Joi.string()
+    .pattern(/^https:\/\/api\.vercel\.com\/v1\/integrations\/deploy\//)
+    .optional()
+    .allow(''),
 
   // --- Integrations (all optional) ---
   //

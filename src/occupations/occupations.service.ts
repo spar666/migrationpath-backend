@@ -90,6 +90,36 @@ export class OccupationsService {
     };
   }
 
+  async findSeoPage(page = 1, pageSize = 100) {
+    const [records, total] = await this.occupationRepository.findAndCount({
+      take: pageSize,
+      skip: (page - 1) * pageSize,
+      order: { anzsco_code: 'ASC' },
+      relations: ['occupationVisas', 'occupationVisas.visa'],
+    });
+    const data = records.map((occupation) => {
+      const links = occupation.occupationVisas || [];
+      const dates = [occupation.updated_at, ...links.flatMap(link => [link.updated_at, link.visa?.updated_at])]
+        .filter((date): date is Date => Boolean(date));
+      const lastmod = dates.length ? new Date(Math.max(...dates.map(date => new Date(date).getTime()))) : undefined;
+      return {
+        anzsco_code: occupation.anzsco_code,
+        occupation_name: occupation.occupation_name,
+        description: occupation.description,
+        assessing_authority: occupation.assessing_authority,
+        listMemberships: (occupation.listMemberships || []).map(item => ({ list_code: item.list_code })),
+        updated_at: lastmod,
+        eligibleVisas: links.filter(link => link.is_active && link.visa?.is_active).map(link => ({
+          subclassNumber: link.visa.subclass_number,
+          streamTitle: link.visa.stream_title,
+          name: link.visa.name,
+          caveats: link.caveats,
+        })),
+      };
+    });
+    return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+  }
+
   async searchOccupations(query: Record<string, any>) {
     const {
       q,

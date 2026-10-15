@@ -17,10 +17,12 @@ export class CorrelationIdMiddleware implements NestMiddleware {
       (req.headers['x-request-id'] as string) || randomUUID();
 
     // Attach to request so interceptors / filters can use it
-    (req as any).correlationId = correlationId;
+    (req as Request & { correlationId: string }).correlationId = correlationId;
 
     // Echo back to client
     res.setHeader('X-Request-ID', correlationId);
+    // This application serves API data, not indexable public HTML pages.
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
 
     next();
   }

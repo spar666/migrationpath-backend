@@ -7,6 +7,7 @@ import {
   IsNotEmptyObject,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { EditorialFieldsDto, OccupationEditorialDto } from './editorial.dto';
 
 export class PageConfigDto {
   @ApiProperty({ description: 'Hero headline text' })
@@ -82,7 +83,7 @@ export class FooterConfigDto {
   resourceLinks?: string[];
 }
 
-export class VisaDetailDto {
+export class VisaDetailDto extends EditorialFieldsDto {
   @ApiProperty()
   @IsString()
   subclass: string;
@@ -96,7 +97,7 @@ export class VisaDetailDto {
   description: string;
 }
 
-export class VisaCategoryDto {
+export class VisaCategoryDto extends EditorialFieldsDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -123,6 +124,13 @@ export class VisaCategoryDto {
 }
 
 export class UpdateSiteConfigDto {
+  @ApiPropertyOptional({ type: [OccupationEditorialDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OccupationEditorialDto)
+  occupationPages?: OccupationEditorialDto[];
+
   @ApiPropertyOptional({ type: [VisaCategoryDto] })
   @IsOptional()
   @IsArray()

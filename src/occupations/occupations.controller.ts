@@ -15,6 +15,7 @@ import { Roles } from '../auth/roles.decorator';
 import { OccupationsService } from './occupations.service';
 import { CreateOccupationDto, UpdateOccupationDto } from './dto/occupation.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { CmsPaginationDto } from '../cms/dto/cms-query.dto';
 
 @ApiTags('occupations')
 @Controller('occupations')
@@ -40,6 +41,12 @@ export class OccupationsController {
   @ApiOperation({ summary: 'All thresholds for invitation tracking' })
   getThresholds() {
     return this.occupationsService.getThresholds();
+  }
+
+  @Get('seo')
+  @ApiOperation({ summary: 'Public occupation pages with active visa mappings, for build-time rendering' })
+  seo(@Query() query: CmsPaginationDto) {
+    return this.occupationsService.findSeoPage(query.page, query.pageSize);
   }
 
   @Get(':anzsco')

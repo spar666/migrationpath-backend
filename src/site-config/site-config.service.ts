@@ -21,7 +21,7 @@ const DEFAULT_CONFIG: Record<string, any> = {
     processingTimeHealthcare: '7 Days',
     processingTimeTech: '14 Days',
     benefits: [
-      'MARA Registered Agents',
+      'Official source references',
       '2026 Priority Lists',
       'Real-Time Points Optimizer',
     ],
@@ -80,7 +80,7 @@ const DEFAULT_CONFIG: Record<string, any> = {
   },
   footer: {
     maraStatement:
-      'MigrationPath is operated by registered migration agents. MARA Registration: XXXXXX',
+      'Our tools provide general information. Verify a migration agent’s registration with OMARA before engaging professional services.',
     quickLinks: ['Home', 'Points Calculator', 'News', 'Contact'],
     resourceLinks: [
       '2026 Priority Occupation List',
